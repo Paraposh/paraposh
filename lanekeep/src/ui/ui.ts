@@ -2,6 +2,8 @@ import type { Campaign } from '../game/campaign';
 import { isUnlocked, type StarMap } from '../game/campaign';
 import type { LevelResult } from '../game/flow';
 import type { Sim } from '../sim/sim';
+import { buyBlock, rankOf, starsAvailable, type MetaRanks, type MetaTree } from '../meta/meta';
+import type { Progress } from '../game/progress';
 import { buildOptions, heroModel, hudModel, spellButtons, towerPanel } from './viewModels';
 
 export interface UiCallbacks {
@@ -19,6 +21,11 @@ export interface UiCallbacks {
   onSpeed(speed: number): void;
   onSpell(key: string, needsTarget: boolean): void;
   onMute(muted: boolean): void;
+  onOpenUpgrades(): void;
+  onCloseUpgrades(): void;
+  onBuyUpgrade(id: string): void;
+  onRespec(): void;
+  onResetSave(): void;
 }
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
@@ -30,6 +37,8 @@ export class Ui {
   private readonly cache = new Map<string, string>();
   private popup: { kind: 'build'; spotId: string } | { kind: 'tower'; towerId: number } | null = null;
   armedSpell: string | null = null;
+  /** First click on Reset progress arms it; a second click confirms. */
+  confirmReset = false;
   speed = 1;
   muted = false;
 
@@ -62,6 +71,11 @@ export class Ui {
       case 'speed': return cb.onSpeed(Number(d.speed));
       case 'spell': return cb.onSpell(d.key!, d.needs === '1');
       case 'mute': this.muted = !this.muted; return cb.onMute(this.muted);
+      case 'upgrades': return cb.onOpenUpgrades();
+      case 'closeupgrades': return cb.onCloseUpgrades();
+      case 'buyup': return cb.onBuyUpgrade(d.id!);
+      case 'respec': return cb.onRespec();
+      case 'resetsave': return cb.onResetSave();
       case 'closepopup': this.popup = null; return;
     }
   }
@@ -98,12 +112,12 @@ export class Ui {
   }
 
   menu(): void {
-    this.hide('map', 'hud', 'popup', 'spells', 'hero', 'results');
-    this.set('menu', `<div class="card center"><h1>Lanekeep</h1><p class="sub">Hold the lanes. Hold the keep.</p><button data-act="play" class="big">Play</button><button data-act="mute" class="ghost">${this.muted ? 'Sound: off' : 'Sound: on'}</button></div>`, 'screen');
+    this.hide('map', 'hud', 'popup', 'spells', 'hero', 'results', 'upgrades');
+    this.set('menu', `<div class="card center"><h1>Lanekeep</h1><p class="sub">Hold the lanes. Hold the keep.</p><button data-act="play" class="big">Play</button><button data-act="mute" class="ghost">${this.muted ? 'Sound: off' : 'Sound: on'}</button><button data-act="resetsave" class="ghost">${this.confirmReset ? 'Click again to erase progress' : 'Reset progress'}</button></div>`, 'screen');
   }
 
-  map(campaign: Campaign, stars: StarMap): void {
-    this.hide('menu', 'hud', 'popup', 'spells', 'hero', 'results');
+  map(campaign: Campaign, stars: StarMap, avail = 0): void {
+    this.hide('menu', 'hud', 'popup', 'spells', 'hero', 'results', 'upgrades');
     const nodes = campaign.levels
       .map((l) => {
         const open = isUnlocked(campaign, l.id, stars);
@@ -112,7 +126,27 @@ export class Ui {
       })
       .join('');
     const total = Object.values(stars).reduce((a, b) => a + b, 0);
-    this.set('map', `<div class="mapview"><div class="maptitle">Campaign map <span class="stars">★ ${total}</span></div>${nodes}<button data-act="menu" class="ghost back">Back</button></div>`, 'screen');
+    this.set('map', `<div class="mapview"><div class="maptitle">Campaign map <span class="stars">★ ${total}</span></div>${nodes}<button data-act="menu" class="ghost back">Back</button><button data-act="upgrades" class="upbtn">Upgrades${avail > 0 ? ` <span class="stars">★${avail}</span>` : ''}</button></div>`, 'screen');
+  }
+
+  upgrades(tree: MetaTree, progress: Progress, ranks: MetaRanks): void {
+    this.hide('menu', 'map', 'hud', 'popup', 'spells', 'hero', 'results');
+    const branches = [...new Set(tree.upgrades.map((u) => u.branch))];
+    const cols = branches
+      .map((b) => {
+        const items = tree.upgrades
+          .filter((u) => u.branch === b)
+          .map((u) => {
+            const rank = rankOf(ranks, u.id);
+            const block = buyBlock(tree, progress, ranks, u.id);
+            const label = block === 'maxed' ? 'Max' : block === 'locked' ? 'Locked' : `${u.costs[rank]}★`;
+            return `<button class="up" data-act="buyup" data-id="${esc(u.id)}" ${block ? 'disabled' : ''}><b>${esc(u.name)}</b><span class="stars">${'●'.repeat(rank)}${'○'.repeat(u.maxRank - rank)}</span><small>${esc(u.description)}</small><small>${label}${u.requires && block === 'locked' ? ` · needs ${esc(tree.upgrades.find((x) => x.id === u.requires!.id)?.name ?? '')} ${u.requires.rank}` : ''}</small></button>`;
+          })
+          .join('');
+        return `<div class="branch"><h3>${esc(b)}</h3>${items}</div>`;
+      })
+      .join('');
+    this.set('upgrades', `<div class="card"><h2>Upgrades <span class="stars">★ ${starsAvailable(tree, progress, ranks)} to spend</span></h2><div class="branches">${cols}</div><div class="row"><button data-act="respec" class="ghost">Refund all</button><button data-act="closeupgrades" class="big">Done</button></div></div>`, 'screen');
   }
 
   results(r: LevelResult, name: string, newStars: number, hasNext: boolean): void {

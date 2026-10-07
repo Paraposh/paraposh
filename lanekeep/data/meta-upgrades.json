@@ -1,0 +1,10 @@
+{
+  "upgrades": [
+    { "id": "war_chest", "name": "War Chest", "description": "+40 starting gold per rank.", "branch": "Economy", "maxRank": 3, "costs": [1, 2, 3], "effect": { "kind": "startGold", "perRank": 40 } },
+    { "id": "tax_collectors", "name": "Tax Collectors", "description": "+60 starting gold per rank.", "branch": "Economy", "maxRank": 2, "costs": [3, 4], "effect": { "kind": "startGold", "perRank": 60 }, "requires": { "id": "war_chest", "rank": 2 } },
+    { "id": "sturdy_walls", "name": "Sturdy Walls", "description": "+2 lives per rank.", "branch": "Defense", "maxRank": 3, "costs": [2, 3, 4], "effect": { "kind": "startLives", "perRank": 2 } },
+    { "id": "sharp_arrows", "name": "Sharpened Arms", "description": "+5% tower damage per rank.", "branch": "Defense", "maxRank": 3, "costs": [2, 3, 4], "effect": { "kind": "towerDamage", "perRank": 0.05 }, "requires": { "id": "sturdy_walls", "rank": 1 } },
+    { "id": "arcane_focus", "name": "Arcane Focus", "description": "-8% spell cooldowns per rank.", "branch": "Magic", "maxRank": 3, "costs": [2, 3, 4], "effect": { "kind": "spellCooldown", "perRank": 0.08 } },
+    { "id": "heroic_vigor", "name": "Heroic Vigor", "description": "+10% hero health per rank.", "branch": "Magic", "maxRank": 3, "costs": [1, 2, 3], "effect": { "kind": "heroHp", "perRank": 0.1 }, "requires": { "id": "arcane_focus", "rank": 1 } }
+  ]
+}

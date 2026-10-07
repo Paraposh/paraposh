@@ -5,6 +5,8 @@ import soldiers from '../../data/soldiers.json';
 import spells from '../../data/spells.json';
 import heroes from '../../data/heroes.json';
 import campaignRaw from '../../data/campaign.json';
+import metaRaw from '../../data/meta-upgrades.json';
+import { validateMeta, type MetaTree } from '../meta/meta';
 import { validateCampaign, type Campaign } from '../game/campaign';
 import { validateGameData } from './validate';
 import type { GameData } from './types';
@@ -26,4 +28,8 @@ export function loadLevelData(levelId: string): GameData {
   const waves = waveFiles[`../../data/${level.waves}`];
   if (!waves) throw new Error(`Missing waves file ${level.waves}`);
   return validateGameData({ config, enemies, towers, soldiers, spells, heroes, level, waves });
+}
+
+export function loadMeta(): MetaTree {
+  return validateMeta(metaRaw);
 }
