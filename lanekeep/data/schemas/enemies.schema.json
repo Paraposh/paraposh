@@ -1,0 +1,20 @@
+{
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": ["name","hp","speed","armor","magicResist","bounty","livesCost","flying","radius","traits"],
+    "properties": {
+      "name": { "type": "string" },
+      "hp": { "type": "number", "exclusiveMinimum": 0 },
+      "speed": { "type": "number", "exclusiveMinimum": 0 },
+      "armor": { "type": "number", "minimum": 0, "maximum": 1 },
+      "magicResist": { "type": "number", "minimum": 0, "maximum": 1 },
+      "bounty": { "type": "number", "minimum": 0 },
+      "livesCost": { "type": "integer", "minimum": 0 },
+      "flying": { "type": "boolean" },
+      "radius": { "type": "number", "exclusiveMinimum": 0 },
+      "traits": { "type": "array", "items": { "type": "object", "required": ["type"] } }
+    }
+  }
+}

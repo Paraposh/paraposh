@@ -1,0 +1,14 @@
+{
+  "goblin_runner": {
+    "name": "Goblin Runner",
+    "hp": 60,
+    "speed": 55,
+    "armor": 0.0,
+    "magicResist": 0.0,
+    "bounty": 6,
+    "livesCost": 1,
+    "flying": false,
+    "radius": 10,
+    "traits": []
+  }
+}

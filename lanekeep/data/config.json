@@ -1,0 +1,19 @@
+{
+  "tickRate": 60,
+  "startingLives": 20,
+  "sellRefundPct": 0.7,
+  "earlyCallGoldPerSec": 1.0,
+  "earlyCallMaxBonus": 100,
+  "resistMin": 0,
+  "resistMax": 0.9,
+  "splashEdgeMult": 0.4,
+  "laneOffsetJitter": 0.5,
+  "projectileLeadIterations": 4,
+  "pathSamplesPerSegment": 24,
+  "stars": [
+    { "stars": 3, "minLives": 18 },
+    { "stars": 2, "minLives": 10 },
+    { "stars": 1, "minLives": 1 }
+  ],
+  "speeds": [0, 1, 2]
+}

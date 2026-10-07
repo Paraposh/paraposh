@@ -1,0 +1,72 @@
+{
+  "id": "level-01",
+  "name": "Mossy Crossing",
+  "world": {
+    "width": 1280,
+    "height": 720
+  },
+  "startGold": 300,
+  "paths": {
+    "main": {
+      "points": [
+        [
+          0,
+          360
+        ],
+        [
+          300,
+          360
+        ],
+        [
+          500,
+          200
+        ],
+        [
+          900,
+          260
+        ],
+        [
+          1280,
+          360
+        ]
+      ],
+      "spline": "catmullRom",
+      "lanes": 3,
+      "laneSpacing": 14
+    }
+  },
+  "buildSpots": [
+    {
+      "id": "s1",
+      "x": 420,
+      "y": 300,
+      "allowed": [
+        "archer"
+      ]
+    },
+    {
+      "id": "s2",
+      "x": 700,
+      "y": 160,
+      "allowed": [
+        "archer"
+      ]
+    },
+    {
+      "id": "s3",
+      "x": 800,
+      "y": 330,
+      "allowed": [
+        "archer"
+      ]
+    }
+  ],
+  "availableTowers": [
+    "archer"
+  ],
+  "heroSpawn": [
+    200,
+    420
+  ],
+  "waves": "waves/level-01.waves.json"
+}
