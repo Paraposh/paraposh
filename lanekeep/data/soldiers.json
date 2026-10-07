@@ -1,0 +1,18 @@
+{
+  "footman": {
+    "name": "Footman",
+    "hp": 90,
+    "armor": 0.2,
+    "magicResist": 0.0,
+    "speed": 60,
+    "damage": [
+      3,
+      6
+    ],
+    "damageType": "physical",
+    "cooldown": 1.0,
+    "regenPerSec": 2,
+    "engageRadius": 70,
+    "reach": 16
+  }
+}

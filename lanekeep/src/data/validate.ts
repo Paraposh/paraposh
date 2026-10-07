@@ -3,6 +3,7 @@ import type { GameData } from './types';
 import configSchema from '../../data/schemas/config.schema.json';
 import enemiesSchema from '../../data/schemas/enemies.schema.json';
 import towersSchema from '../../data/schemas/towers.schema.json';
+import soldiersSchema from '../../data/schemas/soldiers.schema.json';
 import levelSchema from '../../data/schemas/level.schema.json';
 import wavesSchema from '../../data/schemas/waves.schema.json';
 
@@ -10,6 +11,7 @@ export interface RawGameData {
   config: unknown;
   enemies: unknown;
   towers: unknown;
+  soldiers: unknown;
   level: unknown;
   waves: unknown;
 }
@@ -19,6 +21,7 @@ const checks = {
   config: ajv.compile(configSchema),
   enemies: ajv.compile(enemiesSchema),
   towers: ajv.compile(towersSchema),
+  soldiers: ajv.compile(soldiersSchema),
   level: ajv.compile(levelSchema),
   waves: ajv.compile(wavesSchema),
 };
@@ -35,8 +38,14 @@ export function validateGameData(raw: RawGameData): GameData {
   if (errors.length > 0) throw new Error(`Invalid game data:\n${errors.join('\n')}`);
 
   const data = raw as GameData;
-  const { level, waves, enemies, towers, config } = data;
+  const { level, waves, enemies, towers, soldiers, config } = data;
   if (config.resistMin > config.resistMax) errors.push('config: resistMin > resistMax');
+  for (const [towerId, tower] of Object.entries(towers)) {
+    if (tower.family !== 'meleeBarracks') continue;
+    for (const tier of tower.tiers) {
+      if (!soldiers[tier.soldierId]) errors.push(`towers.${towerId}: unknown soldier "${tier.soldierId}"`);
+    }
+  }
   for (const towerId of level.availableTowers) {
     if (!towers[towerId]) errors.push(`level.availableTowers: unknown tower "${towerId}"`);
   }

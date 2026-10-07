@@ -81,5 +81,19 @@
         }
       }
     ]
+  },
+  "barracks": {
+    "family": "meleeBarracks",
+    "name": "Barracks",
+    "antiAir": false,
+    "tiers": [
+      {
+        "cost": 70,
+        "soldierId": "footman",
+        "soldierCount": 3,
+        "rallyRange": 120,
+        "respawn": 10
+      }
+    ]
   }
 }

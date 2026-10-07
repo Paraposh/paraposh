@@ -14,6 +14,8 @@ export interface Config {
   projectileLeadIterations: number;
   pathSamplesPerSegment: number;
   stars: { stars: number; minLives: number }[];
+  maxSoldiersPerEnemy: number;
+  soldierFormationRadius: number;
   speeds: number[];
 }
 
@@ -28,6 +30,8 @@ export interface EnemyDef {
   flying: boolean;
   radius: number;
   traits: { type: string }[];
+  /** Melee attack used against blockers. Enemies without it stop but do not hit back. */
+  melee?: { damage: number; damageType: DamageType; cooldown: number };
 }
 
 export interface ShredDef {
@@ -44,7 +48,7 @@ export interface SplashDef {
   radius: number;
 }
 
-export interface TowerTier {
+export interface ShooterTier {
   cost: number;
   range: number;
   damage: [number, number];
@@ -61,12 +65,47 @@ export interface TowerTier {
   shred?: ShredDef;
 }
 
-export interface TowerDef {
-  family: 'rangedPhysical' | 'meleeBarracks' | 'magic' | 'areaArtillery';
+export interface BarracksTier {
+  cost: number;
+  soldierId: string;
+  soldierCount: number;
+  /** Max distance from the tower at which the rally point can be placed. */
+  rallyRange: number;
+  /** Seconds until a dead soldier is replaced. */
+  respawn: number;
+}
+
+export interface ShooterTowerDef {
+  family: 'rangedPhysical' | 'magic' | 'areaArtillery';
   name: string;
   antiAir: boolean;
   targeting: 'furthestAlongPath';
-  tiers: TowerTier[];
+  tiers: ShooterTier[];
+}
+
+export interface BarracksTowerDef {
+  family: 'meleeBarracks';
+  name: string;
+  antiAir: boolean;
+  tiers: BarracksTier[];
+}
+
+export type TowerDef = ShooterTowerDef | BarracksTowerDef;
+
+export interface SoldierDef {
+  name: string;
+  hp: number;
+  armor: number;
+  magicResist: number;
+  speed: number;
+  damage: [number, number];
+  damageType: DamageType;
+  cooldown: number;
+  regenPerSec: number;
+  /** A soldier acquires enemies within this distance of its rally point. */
+  engageRadius: number;
+  /** Distance at which a soldier counts as in contact with its target. */
+  reach: number;
 }
 
 export interface PathDef {
@@ -117,6 +156,7 @@ export interface GameData {
   config: Config;
   enemies: Record<string, EnemyDef>;
   towers: Record<string, TowerDef>;
+  soldiers: Record<string, SoldierDef>;
   level: LevelDef;
   waves: WavesFile;
 }

@@ -7,7 +7,6 @@
       "family",
       "name",
       "antiAir",
-      "targeting",
       "tiers"
     ],
     "properties": {
@@ -37,12 +36,7 @@
           "type": "object",
           "additionalProperties": false,
           "required": [
-            "cost",
-            "range",
-            "damage",
-            "damageType",
-            "cooldown",
-            "projectile"
+            "cost"
           ],
           "properties": {
             "cost": {
@@ -146,6 +140,21 @@
                   "minimum": 1
                 }
               }
+            },
+            "soldierId": {
+              "type": "string"
+            },
+            "soldierCount": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rallyRange": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "respawn": {
+              "type": "number",
+              "minimum": 0
             }
           }
         }
@@ -153,6 +162,54 @@
       "specializations": {
         "type": "object"
       }
-    }
+    },
+    "allOf": [
+      {
+        "if": {
+          "properties": {
+            "family": {
+              "const": "meleeBarracks"
+            }
+          },
+          "required": [
+            "family"
+          ]
+        },
+        "then": {
+          "properties": {
+            "tiers": {
+              "items": {
+                "required": [
+                  "cost",
+                  "soldierId",
+                  "soldierCount",
+                  "rallyRange",
+                  "respawn"
+                ]
+              }
+            }
+          }
+        },
+        "else": {
+          "required": [
+            "targeting"
+          ],
+          "properties": {
+            "tiers": {
+              "items": {
+                "required": [
+                  "cost",
+                  "range",
+                  "damage",
+                  "damageType",
+                  "cooldown",
+                  "projectile"
+                ]
+              }
+            }
+          }
+        }
+      }
+    ]
   }
 }
