@@ -148,21 +148,21 @@ export interface Projectile {
 
 export type SimEvent =
   | { type: 'enemySpawned'; tick: number; id: number }
-  | { type: 'enemyKilled'; tick: number; id: number; gold: number }
+  | { type: 'enemyKilled'; tick: number; id: number; gold: number; x: number; y: number }
   | { type: 'enemyLeaked'; tick: number; id: number; lives: number }
   | { type: 'towerPlaced'; tick: number; id: number }
   | { type: 'projectileFired'; tick: number; id: number }
-  | { type: 'projectileHit'; tick: number; id: number; targetId: number; damage: number }
+  | { type: 'projectileHit'; tick: number; id: number; targetId: number; damage: number; x: number; y: number }
   | { type: 'waveStarted'; tick: number; index: number }
   | { type: 'waveCalled'; tick: number; index: number; secondsSkipped: number; bonus: number }
   | { type: 'towerUpgraded'; tick: number; id: number; tier: number; specId: string }
   | { type: 'towerSold'; tick: number; id: number; refund: number }
   | { type: 'soldierSpawned'; tick: number; id: number }
   | { type: 'soldierKilled'; tick: number; id: number }
-  | { type: 'meleeHit'; tick: number; attackerId: number; targetId: number; damage: number; onSoldier: boolean }
+  | { type: 'meleeHit'; tick: number; attackerId: number; targetId: number; damage: number; onSoldier: boolean; x: number; y: number }
   | { type: 'spellCast'; tick: number; spellId: string }
   | { type: 'spellImpact'; tick: number; spellId: string; x: number; y: number; radius: number }
-  | { type: 'heroLevelUp'; tick: number; level: number }
+  | { type: 'heroLevelUp'; tick: number; level: number; x: number; y: number }
   | { type: 'heroDied'; tick: number }
   | { type: 'heroRevived'; tick: number }
   | { type: 'enemyEnraged'; tick: number; id: number }
