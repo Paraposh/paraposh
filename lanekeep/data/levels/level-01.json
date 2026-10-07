@@ -113,5 +113,10 @@
     200,
     420
   ],
-  "waves": "waves/level-01.waves.json"
+  "waves": "waves/level-01.waves.json",
+  "heroId": "captain_mara",
+  "spells": [
+    "meteor",
+    "reinforcements"
+  ]
 }

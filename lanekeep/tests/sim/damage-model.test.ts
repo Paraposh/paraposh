@@ -4,7 +4,7 @@ import { damageAfterResist, effectiveResist } from '../../src/sim/math/damage';
 import { splashFactor } from '../../src/sim/math/splash';
 import { Sim } from '../../src/sim/sim';
 import type { Enemy, SimEvent } from '../../src/sim/core/types';
-import { cloneData, injectEnemy, loadData, shooterTier } from '../helpers';
+import { cloneData, injectEnemy, loadData, parkHero, shooterTier } from '../helpers';
 
 const cfg = { resistMin: 0, resistMax: 0.9 };
 
@@ -35,7 +35,7 @@ describe('splashFactor', () => {
 });
 
 function setup(mut?: (d: GameData) => void): Sim {
-  const d = cloneData(loadData());
+  const d = parkHero(cloneData(loadData()));
   // no scheduled spawns interfere: we inject enemies by hand
   d.waves.waves[0]!.groups = [{ enemyId: 'goblin_runner', count: 1, interval: 0, startDelay: 999, path: 'main' }];
   mut?.(d);

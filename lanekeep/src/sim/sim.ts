@@ -1,6 +1,19 @@
-import type { BarracksTier, BossPhase, DamageType, EnemyDef, GameData, PhaseAction, ShooterTier, ShredDef, SoldierDef } from '../data/types';
+import type {
+  AreaDamageSpell,
+  BarracksTier,
+  BossPhase,
+  DamageType,
+  EnemyDef,
+  GameData,
+  HeroDef,
+  PhaseAction,
+  ShooterTier,
+  ShredDef,
+  SoldierDef,
+  SummonSpell,
+} from '../data/types';
 import { Rng } from './core/rng';
-import type { Command, Enemy, Projectile, SimEvent, SimStatus, Soldier, Tower } from './core/types';
+import type { Command, Effect, Enemy, Hero, Projectile, SimEvent, SimStatus, Soldier, Tower } from './core/types';
 import { damageAfterResist } from './math/damage';
 import { leadIntercept } from './math/lead';
 import { splashFactor } from './math/splash';
@@ -25,6 +38,10 @@ export class Sim {
   readonly towers = new Map<number, Tower>();
   readonly soldiers = new Map<number, Soldier>();
   readonly projectiles = new Map<number, Projectile>();
+  readonly effects: Effect[] = [];
+  /** Remaining cooldown ticks per spell key (`spellId` for player spells, `hero:spellId` for the hero ability). */
+  readonly spellCooldowns = new Map<string, number>();
+  hero: Hero | undefined;
   readonly commandLog: { tick: number; cmd: Command }[] = [];
   readonly paths: Record<string, SplinePath> = {};
 
@@ -50,6 +67,30 @@ export class Sim {
       this.paths[id] = new SplinePath(p.points, p.spline, data.config.pathSamplesPerSegment);
     }
     this.waveEntries = this.buildWaveEntries();
+    const heroDef = data.heroes[data.level.heroId];
+    if (heroDef) {
+      const [hx, hy] = data.level.heroSpawn;
+      this.hero = {
+        id: this.nextId++,
+        defId: data.level.heroId,
+        x: hx,
+        y: hy,
+        prevX: hx,
+        prevY: hy,
+        hp: heroDef.stats.hp,
+        maxHp: heroDef.stats.hp,
+        level: 1,
+        xp: 0,
+        state: 'idle',
+        moveX: null,
+        moveY: null,
+        anchorX: hx,
+        anchorY: hy,
+        targetId: 0,
+        cooldown: 0,
+        reviveTicks: 0,
+      };
+    }
     const first = data.waves.waves[0];
     this.nextWaveTick = first ? this.ticks(first.preDelay) : null;
   }
@@ -102,12 +143,15 @@ export class Sim {
     this.spawnSystem();
     this.statusSystem();
     this.traitSystem();
+    this.cooldownSystem();
     this.barracksSystem();
     this.soldierSystem();
+    this.heroSystem();
     this.movementSystem();
     this.enemyCombatSystem();
     this.towerSystem();
     this.projectileSystem();
+    this.effectSystem();
     this.endCheck();
     this.tick++;
   }
@@ -137,6 +181,10 @@ export class Sim {
     }
     for (const t of this.towers.values()) (mix(t.id), mix(t.cooldown), mix(t.tier), mix(t.specId.length), mix(t.rallyX), mix(t.rallyY));
     for (const s of this.soldiers.values()) (mix(s.id), mix(s.x), mix(s.y), mix(s.hp), mix(s.targetId));
+    const hero = this.hero;
+    if (hero) (mix(hero.x), mix(hero.y), mix(hero.hp), mix(hero.level), mix(hero.xp), mix(hero.reviveTicks), mix(hero.targetId));
+    for (const fx of this.effects) (mix(fx.x), mix(fx.y), mix(fx.ticksLeft));
+    for (const [, v] of this.spellCooldowns) mix(v);
     for (const p of this.projectiles.values()) (mix(p.id), mix(p.x), mix(p.y), mix(p.ticksLeft));
     return h >>> 0;
   }
@@ -205,6 +253,9 @@ export class Sim {
       else if (cmd.type === 'specialize') this.specialize(cmd.towerId, cmd.specId);
       else if (cmd.type === 'sellTower') this.sellTower(cmd.towerId);
       else if (cmd.type === 'callWave') this.callWave();
+      else if (cmd.type === 'moveHero') this.moveHero(cmd.x, cmd.y);
+      else if (cmd.type === 'castSpell') this.castSpell(cmd.spellId, cmd.x, cmd.y, false);
+      else if (cmd.type === 'heroAbility') this.heroAbility();
     }
   }
 
@@ -502,15 +553,17 @@ export class Sim {
       if (ranged && ranged.type === 'ranged') {
         if (e.rangedCooldown > 0) e.rangedCooldown--;
         else {
-          let near: Soldier | undefined;
+          let near: number | undefined;
           let best = ranged.range;
           for (const s of this.soldiers.values()) {
             const d = Math.hypot(s.x - e.x, s.y - e.y);
-            if (d <= best) (best = d), (near = s);
+            if (d <= best) (best = d), (near = s.id);
           }
-          if (near) {
+          const h = this.hero;
+          if (h && h.state !== 'dead' && Math.hypot(h.x - e.x, h.y - e.y) <= best) near = h.id;
+          if (near !== undefined) {
             e.rangedCooldown = Math.max(1, this.ticks(ranged.cooldown));
-            this.hurtSoldier(e, near, ranged.damage * e.damageMult, ranged.damageType);
+            this.hurtDefender(e, near, ranged.damage * e.damageMult, ranged.damageType);
           }
         }
       }
@@ -519,11 +572,19 @@ export class Sim {
         e.attackCooldown--;
         continue;
       }
-      const soldier = this.soldiers.get(e.blockers[0] as number);
-      if (!soldier) continue;
+      const id = e.blockers[0] as number;
+      if (!this.soldiers.has(id) && this.hero?.id !== id) continue;
       e.attackCooldown = Math.max(1, this.ticks(def.melee.cooldown));
-      this.hurtSoldier(e, soldier, def.melee.damage * e.damageMult, def.melee.damageType);
+      this.hurtDefender(e, id, def.melee.damage * e.damageMult, def.melee.damageType);
     }
+  }
+
+  /** Damage to whichever defender (soldier or hero) has this id. */
+  private hurtDefender(e: Enemy, id: number, raw: number, type: DamageType): void {
+    const soldier = this.soldiers.get(id);
+    if (soldier) return this.hurtSoldier(e, soldier, raw, type);
+    const h = this.hero;
+    if (h && h.id === id && h.state !== 'dead') this.hurtHero(e, h, raw, type);
   }
 
   private hurtSoldier(e: Enemy, soldier: Soldier, raw: number, type: DamageType): void {
@@ -564,6 +625,9 @@ export class Sim {
           targetId: 0,
           state: 'moving',
           cooldown: 0,
+          anchorX: tower.rallyX,
+          anchorY: tower.rallyY,
+          lifetime: -1,
         };
         this.soldiers.set(soldier.id, soldier);
         slot.soldierId = soldier.id;
@@ -586,7 +650,7 @@ export class Sim {
   }
 
   /** Drops the soldier's target and removes it from that enemy's blocker list. */
-  private releaseTarget(s: Soldier): void {
+  private releaseTarget(s: { id: number; targetId: number }): void {
     const e = this.enemies.get(s.targetId);
     if (e) e.blockers = e.blockers.filter((id) => id !== s.id);
     s.targetId = 0;
@@ -609,15 +673,23 @@ export class Sim {
 
     for (const s of [...this.soldiers.values()]) {
       const sDef = this.data.soldiers[s.defId] as SoldierDef;
-      const tower = this.towers.get(s.towerId);
-      if (!tower) continue;
+      const tower = s.towerId !== 0 ? this.towers.get(s.towerId) : undefined;
+      if (s.towerId !== 0 && !tower) continue;
+      if (s.lifetime >= 0 && --s.lifetime <= 0) {
+        this.killSoldier(s); // summoned soldiers expire; they never respawn
+        continue;
+      }
+      if (tower) {
+        s.anchorX = tower.rallyX;
+        s.anchorY = tower.rallyY;
+      }
       s.prevX = s.x;
       s.prevY = s.y;
       if (s.cooldown > 0) s.cooldown--;
 
       // Keep or drop the current target (leash is 1.5x the acquire radius to avoid thrashing).
       let target = s.targetId !== 0 ? this.enemies.get(s.targetId) : undefined;
-      if (s.targetId !== 0 && !(target && this.blockable(target.defId) && this.within(target, tower, sDef.engageRadius * 1.5))) {
+      if (s.targetId !== 0 && !(target && this.blockable(target.defId) && this.within(target, s.anchorX, s.anchorY, sDef.engageRadius * 1.5))) {
         const prev = s.targetId;
         this.releaseTarget(s);
         targeters.set(prev, Math.max(0, (targeters.get(prev) ?? 1) - 1));
@@ -626,7 +698,7 @@ export class Sim {
       if (!target) {
         let best: Enemy | undefined;
         for (const e of this.enemies.values()) {
-          if (!this.blockable(e.defId) || !this.within(e, tower, sDef.engageRadius)) continue;
+          if (!this.blockable(e.defId) || !this.within(e, s.anchorX, s.anchorY, sDef.engageRadius)) continue;
           if ((targeters.get(e.id) ?? 0) >= cfg.maxSoldiersPerEnemy) continue;
           if (!best || e.dist > best.dist) best = e;
         }
@@ -653,7 +725,7 @@ export class Sim {
           s.y += (dy / dist) * step;
         }
       } else {
-        const [fx, fy] = this.formationSpot(tower, s.slot);
+        const [fx, fy] = tower ? this.formationSpot(tower, s.slot) : [s.anchorX, s.anchorY];
         const dx = fx - s.x;
         const dy = fy - s.y;
         const dist = Math.hypot(dx, dy);
@@ -670,8 +742,8 @@ export class Sim {
     }
   }
 
-  private within(e: Enemy, tower: Tower, radius: number): boolean {
-    return Math.hypot(e.x - tower.rallyX, e.y - tower.rallyY) <= radius;
+  private within(e: Enemy, ax: number, ay: number, radius: number): boolean {
+    return Math.hypot(e.x - ax, e.y - ay) <= radius;
   }
 
   private formationSpot(tower: Tower, slot: number): [number, number] {
@@ -687,6 +759,238 @@ export class Sim {
     s.cooldown = Math.max(1, this.ticks(sDef.cooldown));
     const dealt = this.damageEnemy(target, raw, sDef.damageType, 0, 0);
     this.emit({ type: 'meleeHit', tick: this.tick, attackerId: s.id, targetId: target.id, damage: dealt, onSoldier: false });
+  }
+
+  // --------------------------------------------------------------- hero, spells
+
+  /** Hero stats at its current level (base stats times the level's multipliers). */
+  heroStats(h: Hero): HeroDef['stats'] {
+    const def = this.data.heroes[h.defId] as HeroDef;
+    const lv = h.level >= 2 ? def.levels[h.level - 2] : undefined;
+    const dm = lv?.damageMult ?? 1;
+    return {
+      ...def.stats,
+      hp: def.stats.hp * (lv?.hpMult ?? 1),
+      damage: [def.stats.damage[0] * dm, def.stats.damage[1] * dm],
+    };
+  }
+
+  private gainXp(amount: number): void {
+    const h = this.hero;
+    const def = h && this.data.heroes[h.defId];
+    if (!h || !def || h.state === 'dead') return;
+    h.xp += amount;
+    for (;;) {
+      const next = def.levels[h.level - 1];
+      if (!next || h.xp < next.xpTotal) break;
+      const oldMax = h.maxHp;
+      h.level++;
+      h.maxHp = this.heroStats(h).hp;
+      h.hp += h.maxHp - oldMax; // level-ups grant the extra HP
+      this.emit({ type: 'heroLevelUp', tick: this.tick, level: h.level });
+    }
+  }
+
+  private moveHero(x: number, y: number): void {
+    const h = this.hero;
+    if (!h || h.state === 'dead') return this.reject('hero is down');
+    const w = this.data.level.world;
+    h.moveX = Math.min(Math.max(x, 0), w.width);
+    h.moveY = Math.min(Math.max(y, 0), w.height);
+  }
+
+  private hurtHero(e: Enemy, h: Hero, raw: number, type: DamageType): void {
+    const st = this.heroStats(h);
+    const dealt = damageAfterResist(raw, type, st.armor, st.magicResist, this.data.config);
+    h.hp -= dealt;
+    this.emit({ type: 'meleeHit', tick: this.tick, attackerId: e.id, targetId: h.id, damage: dealt, onSoldier: true });
+    if (h.hp <= 0) this.killHero(h);
+  }
+
+  private killHero(h: Hero): void {
+    this.releaseTarget(h);
+    for (const e of this.enemies.values()) e.blockers = e.blockers.filter((id) => id !== h.id);
+    const def = this.data.heroes[h.defId] as HeroDef;
+    h.state = 'dead';
+    h.moveX = h.moveY = null;
+    h.hp = 0;
+    h.reviveTicks = this.ticks(def.reviveTime + def.reviveTimePerLevel * (h.level - 1));
+    this.emit({ type: 'heroDied', tick: this.tick });
+  }
+
+  private heroSystem(): void {
+    const h = this.hero;
+    if (!h) return;
+    const rate = this.data.config.tickRate;
+    if (h.state === 'dead') {
+      if (--h.reviveTicks <= 0) {
+        const [sx, sy] = this.data.level.heroSpawn;
+        h.x = h.prevX = h.anchorX = sx;
+        h.y = h.prevY = h.anchorY = sy;
+        h.maxHp = this.heroStats(h).hp;
+        h.hp = h.maxHp;
+        h.state = 'idle';
+        this.emit({ type: 'heroRevived', tick: this.tick });
+      }
+      return;
+    }
+    const st = this.heroStats(h);
+    h.prevX = h.x;
+    h.prevY = h.y;
+    if (h.cooldown > 0) h.cooldown--;
+
+    if (h.moveX !== null && h.moveY !== null) {
+      if (h.targetId !== 0) this.releaseTarget(h);
+      const dx = h.moveX - h.x;
+      const dy = h.moveY - h.y;
+      const dist = Math.hypot(dx, dy);
+      const step = st.speed / rate;
+      if (dist <= step) {
+        h.x = h.moveX;
+        h.y = h.moveY;
+        h.moveX = h.moveY = null;
+        h.anchorX = h.x;
+        h.anchorY = h.y;
+        h.state = 'idle';
+      } else {
+        h.x += (dx / dist) * step;
+        h.y += (dy / dist) * step;
+        h.state = 'moving';
+      }
+      return;
+    }
+
+    let target = h.targetId !== 0 ? this.enemies.get(h.targetId) : undefined;
+    if (h.targetId !== 0 && !(target && this.blockable(target.defId) && this.within(target, h.anchorX, h.anchorY, st.engageRadius * 1.5))) {
+      this.releaseTarget(h);
+      target = undefined;
+    }
+    if (!target) {
+      let best: Enemy | undefined;
+      for (const e of this.enemies.values()) {
+        if (!this.blockable(e.defId) || !this.within(e, h.anchorX, h.anchorY, st.engageRadius)) continue;
+        if (!best || e.dist > best.dist) best = e;
+      }
+      if (best) {
+        target = best;
+        h.targetId = best.id;
+      }
+    }
+
+    if (target) {
+      const dx = target.x - h.x;
+      const dy = target.y - h.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist <= st.reach) {
+        h.state = 'fighting';
+        if (!target.blockers.includes(h.id)) target.blockers.push(h.id);
+        if (h.cooldown === 0) {
+          h.cooldown = Math.max(1, this.ticks(st.cooldown));
+          const raw = this.rng.range(st.damage[0], st.damage[1]);
+          const dealt = this.damageEnemy(target, raw, st.damageType, 0, 0, true);
+          this.emit({ type: 'meleeHit', tick: this.tick, attackerId: h.id, targetId: target.id, damage: dealt, onSoldier: false });
+        }
+      } else {
+        h.state = 'moving';
+        target.blockers = target.blockers.filter((id) => id !== h.id);
+        const step = Math.min(dist - st.reach * 0.5, st.speed / rate);
+        h.x += (dx / dist) * step;
+        h.y += (dy / dist) * step;
+      }
+    } else {
+      const dx = h.anchorX - h.x;
+      const dy = h.anchorY - h.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 0.5) {
+        h.state = 'moving';
+        const step = Math.min(dist, st.speed / rate);
+        h.x += (dx / dist) * step;
+        h.y += (dy / dist) * step;
+      } else {
+        h.state = 'idle';
+        h.hp = Math.min(h.maxHp, h.hp + st.regenPerSec / rate);
+      }
+    }
+  }
+
+  private cooldownSystem(): void {
+    for (const [k, v] of this.spellCooldowns) if (v > 0) this.spellCooldowns.set(k, v - 1);
+  }
+
+  /** Seconds left on a spell (`spellId`) or the hero ability (`hero:spellId`). 0 when ready. */
+  cooldownLeft(key: string): number {
+    return (this.spellCooldowns.get(key) ?? 0) / this.data.config.tickRate;
+  }
+
+  private heroAbility(): void {
+    const h = this.hero;
+    if (!h || h.state === 'dead') return this.reject('hero is down');
+    const def = this.data.heroes[h.defId] as HeroDef;
+    this.castSpell(def.ability.spellId, h.x, h.y, true);
+  }
+
+  private castSpell(spellId: string, x: number, y: number, fromHero: boolean): void {
+    const spell = this.data.spells[spellId];
+    if (!spell) return this.reject(`unknown spell ${spellId}`);
+    if (!fromHero && !this.data.level.spells.includes(spellId)) return this.reject(`${spellId} not available here`);
+    const key = fromHero ? `hero:${spellId}` : spellId;
+    if ((this.spellCooldowns.get(key) ?? 0) > 0) return this.reject(`${spellId} is on cooldown`);
+    const w = this.data.level.world;
+    const cx = Math.min(Math.max(x, 0), w.width);
+    const cy = Math.min(Math.max(y, 0), w.height);
+    this.spellCooldowns.set(key, this.ticks(spell.cooldown));
+    this.emit({ type: 'spellCast', tick: this.tick, spellId });
+    if (spell.kind === 'areaDamage') {
+      const total = this.ticks(spell.delay);
+      this.effects.push({ id: this.nextId++, spellId, x: cx, y: cy, ticksLeft: total + 1, totalTicks: total, fromHero });
+    } else {
+      this.summonSoldiers(spell, cx, cy);
+    }
+  }
+
+  private summonSoldiers(spell: SummonSpell, x: number, y: number): void {
+    const sDef = this.data.soldiers[spell.soldierId] as SoldierDef;
+    const r = this.data.config.soldierFormationRadius;
+    for (let i = 0; i < spell.count; i++) {
+      const a = (i / spell.count) * Math.PI * 2;
+      const ax = x + (spell.count > 1 ? Math.cos(a) * r : 0);
+      const ay = y + (spell.count > 1 ? Math.sin(a) * r : 0);
+      const soldier: Soldier = {
+        id: this.nextId++,
+        defId: spell.soldierId,
+        towerId: 0,
+        slot: i,
+        x: ax,
+        y: ay,
+        prevX: ax,
+        prevY: ay,
+        hp: sDef.hp,
+        maxHp: sDef.hp,
+        targetId: 0,
+        state: 'idle',
+        cooldown: 0,
+        anchorX: ax,
+        anchorY: ay,
+        lifetime: Math.max(1, this.ticks(spell.lifetime)),
+      };
+      this.soldiers.set(soldier.id, soldier);
+      this.emit({ type: 'soldierSpawned', tick: this.tick, id: soldier.id });
+    }
+  }
+
+  private effectSystem(): void {
+    for (const fx of [...this.effects]) {
+      if (--fx.ticksLeft > 0) continue;
+      this.effects.splice(this.effects.indexOf(fx), 1);
+      const spell = this.data.spells[fx.spellId] as AreaDamageSpell;
+      this.emit({ type: 'spellImpact', tick: this.tick, spellId: fx.spellId, x: fx.x, y: fx.y, radius: spell.radius });
+      for (const e of [...this.enemies.values()]) {
+        const def = this.data.enemies[e.defId];
+        if (!def || (def.flying && !spell.hitsAir)) continue;
+        const f = splashFactor(Math.hypot(e.x - fx.x, e.y - fx.y), spell.radius, this.data.config.splashEdgeMult);
+        if (f > 0) this.damageEnemy(e, spell.damage * f, spell.damageType, 0, 0, fx.fromHero);
+      }
+    }
   }
 
   // ------------------------------------------------------------------ shooters
@@ -792,7 +1096,7 @@ export class Sim {
    * Single entry point for damage to enemies. Resist is reduced by active shred plus `armorPen`/`magicPen`
    * for this hit. Kills pay the bounty. Returns the damage actually dealt after resist.
    */
-  private damageEnemy(e: Enemy, raw: number, type: DamageType, armorPen: number, magicPen: number): number {
+  private damageEnemy(e: Enemy, raw: number, type: DamageType, armorPen: number, magicPen: number, byHero = false): number {
     const def = this.data.enemies[e.defId];
     if (!def) return 0;
     const dealt = damageAfterResist(raw, type, def.armor, def.magicResist, this.data.config, {
@@ -804,6 +1108,7 @@ export class Sim {
       const gold = e.spawned ? 0 : def.bounty;
       this.gold += gold;
       this.emit({ type: 'enemyKilled', tick: this.tick, id: e.id, gold });
+      if (byHero && !e.spawned) this.gainXp(def.bounty);
       for (const t of def.traits) {
         if (t.type !== 'splitsOnDeath') continue;
         for (let k = 0; k < t.count; k++) this.spawnEnemy(t.enemyId, e.pathId, Math.max(0, e.dist - k * 8), { spawned: true });

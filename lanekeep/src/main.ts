@@ -30,6 +30,7 @@ async function boot(): Promise<void> {
   const hud = document.getElementById('hud') as HTMLElement;
   let selected = 'archer';
   let selectedTowerId = 0;
+  let armedSpell: string | null = null;
   const rings: { x: number; y: number; r: number; age: number }[] = [];
   const g = new Graphics();
   app.stage.addChild(g);
@@ -54,12 +55,20 @@ async function boot(): Promise<void> {
     const r = app.canvas.getBoundingClientRect();
     const x = ((ev.clientX - r.left) / r.width) * width;
     const y = ((ev.clientY - r.top) / r.height) * height;
+    if (armedSpell) {
+      sim.queue({ type: 'castSpell', spellId: armedSpell, x, y });
+      armedSpell = null;
+      return;
+    }
+    let onSpot = false;
     for (const s of data.level.buildSpots) {
       if (Math.hypot(s.x - x, s.y - y) >= 24) continue;
+      onSpot = true;
       const here = [...sim.towers.values()].find((t) => t.spotId === s.id);
       if (here) selectedTowerId = here.id;
       else sim.queue({ type: 'placeTower', spotId: s.id, towerId: selected });
     }
+    if (!onSpot) sim.queue({ type: 'moveHero', x, y });
   });
   window.addEventListener('keydown', (ev) => {
     const pick = TOWER_KEYS[ev.key.toLowerCase()];
@@ -67,6 +76,10 @@ async function boot(): Promise<void> {
     const k = ev.key.toLowerCase();
     const sel = sim.towers.get(selectedTowerId);
     if (k === 'n') sim.queue({ type: 'callWave' });
+    if (k === 'm') armedSpell = 'meteor';
+    if (k === 'f') armedSpell = 'reinforcements';
+    if (k === 'h') sim.queue({ type: 'heroAbility' });
+    if (ev.key === 'Escape') armedSpell = null;
     if (sel && k === 'u') sim.queue({ type: 'upgradeTower', towerId: sel.id });
     if (sel && k === 's') sim.queue({ type: 'sellTower', towerId: sel.id });
     if (sel && (k === 'z' || k === 'x')) {
@@ -96,6 +109,13 @@ async function boot(): Promise<void> {
     }
     for (const s of data.level.buildSpots) g.circle(s.x, s.y, 18).fill({ color: 0x3a4a60 });
     for (const t of sim.towers.values()) g.circle(t.x, t.y, 16).fill({ color: TOWER_COLORS[t.defId] ?? 0xffffff });
+    for (const fx of sim.effects) {
+      const sp = data.spells[fx.spellId];
+      if (sp?.kind !== 'areaDamage') continue;
+      const progress = 1 - fx.ticksLeft / Math.max(1, fx.totalTicks);
+      g.circle(fx.x, fx.y, sp.radius).stroke({ width: 2, color: 0xff7a40, alpha: 0.3 + 0.6 * progress });
+      g.circle(fx.x, fx.y, sp.radius * progress).fill({ color: 0xff7a40, alpha: 0.18 });
+    }
     for (const t of sim.towers.values()) {
       if (t.slots.length > 0) g.circle(t.rallyX, t.rallyY, 5).stroke({ width: 2, color: 0x4a78c8 });
     }
@@ -104,6 +124,14 @@ async function boot(): Promise<void> {
       const y = lerp(sd.prevY, sd.y);
       g.circle(x, y, 7).fill({ color: 0x4a78c8 });
       g.rect(x - 9, y - 14, 18 * (sd.hp / sd.maxHp), 3).fill({ color: 0x60c0ff });
+    }
+    const hero = sim.hero;
+    if (hero && hero.state !== 'dead') {
+      const x = lerp(hero.prevX, hero.x);
+      const y = lerp(hero.prevY, hero.y);
+      g.circle(x, y, 10).fill({ color: 0xf2d060 }).stroke({ width: 2, color: 0x806010 });
+      g.rect(x - 12, y - 18, 24 * (hero.hp / hero.maxHp), 3).fill({ color: 0xf2d060 });
+      if (hero.moveX !== null && hero.moveY !== null) g.circle(hero.moveX, hero.moveY, 4).stroke({ width: 1, color: 0xf2d060 });
     }
     for (const e of sim.enemies.values()) {
       const x = lerp(e.prevX, e.x);
@@ -128,8 +156,18 @@ async function boot(): Promise<void> {
     const selInfo = sel
       ? `  | selected ${sel.defId} tier ${sel.tier + 1}${sel.specId ? ' ' + sel.specId : ''} (U upgrade, Z/X specialize, S sell)`
       : '';
+    const cd = (key: string, label: string) => {
+      const left = sim.cooldownLeft(key);
+      return left > 0 ? `${label} ${Math.ceil(left)}s` : `${label} ready`;
+    };
+    const heroInfo = hero
+      ? hero.state === 'dead'
+        ? `hero down ${Math.ceil(hero.reviveTicks / data.config.tickRate)}s`
+        : `hero L${hero.level} ${Math.ceil(hero.hp)}/${Math.ceil(hero.maxHp)}`
+      : '';
+    const spells = `${heroInfo} | ${cd('meteor', 'M meteor')} | ${cd('reinforcements', 'F reinforce')} | ${cd('hero:hero_slam', 'H slam')}${armedSpell ? ` | click to cast ${armedSpell}` : ''}`;
     const end = sim.status === 'won' ? `  VICTORY ${'*'.repeat(sim.stars)}` : sim.status === 'lost' ? '  DEFEAT' : '';
-    hud.textContent = `gold ${sim.gold}  lives ${sim.lives}  wave ${sim.waveIndex}/${sim.waveCount}  ${waveInfo}  speed ${loop.speed}x  build ${selected}${selInfo}${end}  (Q archer 70, W mage 100, E mortar 120, R barracks 70 | click a spot to build | right-click moves rally | space = pause, 1 / 2 = speed)`;
+    hud.textContent = `gold ${sim.gold}  lives ${sim.lives}  wave ${sim.waveIndex}/${sim.waveCount}  ${waveInfo}  speed ${loop.speed}x  build ${selected}${selInfo}${end}  | ${spells}  (Q archer 70, W mage 100, E mortar 120, R barracks 70 | click a spot to build | click ground moves hero | right-click moves rally | space = pause, 1 / 2 = speed)`;
   });
 }
 
