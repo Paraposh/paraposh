@@ -1,5 +1,7 @@
 import { Application } from 'pixi.js';
-import { loadCampaign, loadLevelData } from './data/load';
+import { loadCampaign, loadLevelData, loadMeta } from './data/load';
+import { applyMeta, buy, respec, starsAvailable } from './meta/meta';
+import { defaultSave, loadSave, resetSave, writeSave, type KeyValueStore } from './save/save';
 import { GameFlow } from './game/flow';
 import { newProgress, recordResult } from './game/progress';
 import { Renderer } from './render/renderer';
@@ -13,13 +15,20 @@ import type { SimEvent } from './sim/core/types';
 
 async function boot(): Promise<void> {
   const campaign = loadCampaign();
-  const progress = newProgress();
+  const meta = loadMeta();
+  // localStorage can be missing or blocked (private windows); the game then simply runs without saving.
+  let store: KeyValueStore | undefined;
+  try { store = window.localStorage; } catch { store = undefined; }
+  let save = store ? loadSave(store).save : defaultSave();
+  const persist = (): void => { if (store) writeSave(store, save); };
   const flow = new GameFlow();
   const sfx = new Sfx();
+  sfx.muted = save.settings.muted;
   let sim: Sim | undefined;
   let loop: FixedStepLoop | undefined;
   let newStars = 0;
   let pointer: [number, number] = [0, 0];
+  let showUpgrades = false;
 
   const stage = document.getElementById('stage') as HTMLElement;
   const app = new Application();
@@ -28,7 +37,7 @@ async function boot(): Promise<void> {
   const renderer = new Renderer(app);
 
   const startLevel = (id: string): void => {
-    const data = loadLevelData(id);
+    const data = applyMeta(loadLevelData(id), meta, save.meta);
     // The seed is chosen here, outside the sim, so every attempt differs but each is reproducible from its seed.
     sim = new Sim(data, (Math.random() * 0x7fffffff) | 0);
     loop = new FixedStepLoop(sim);
@@ -39,7 +48,7 @@ async function boot(): Promise<void> {
   };
 
   const ui = new Ui(document.getElementById('ui') as HTMLElement, {
-    onPlay: () => { sfx.unlock(); sfx.play('click'); flow.openMap(); },
+    onPlay: () => { ui.confirmReset = false; sfx.unlock(); sfx.play('click'); flow.openMap(); },
     onSelectLevel: (id) => { sfx.play('click'); flow.startLevel(id); startLevel(id); },
     onBackToMenu: () => flow.backToMenu(),
     onRetry: () => { flow.retry(); startLevel(flow.levelId); },
@@ -60,8 +69,21 @@ async function boot(): Promise<void> {
       if (key.startsWith('hero:') || !needsTarget) sim?.queue({ type: 'heroAbility' });
       else ui.armedSpell = ui.armedSpell === key ? null : key;
     },
-    onMute: (m) => { sfx.muted = m; },
+    onMute: (m) => { sfx.muted = m; save.settings.muted = m; persist(); },
+    onOpenUpgrades: () => { showUpgrades = true; },
+    onCloseUpgrades: () => { showUpgrades = false; },
+    onBuyUpgrade: (id) => { if (buy(meta, save.progress, save.meta, id)) { sfx.play('build'); persist(); } },
+    onRespec: () => { respec(save.meta); persist(); },
+    onResetSave: () => {
+      if (!ui.confirmReset) { ui.confirmReset = true; return; }
+      ui.confirmReset = false;
+      if (store) resetSave(store);
+      save = defaultSave();
+      ui.muted = false; sfx.muted = false;
+    },
   });
+
+  ui.muted = save.settings.muted;
 
   const toWorld = (ev: PointerEvent | MouseEvent): [number, number] => {
     const r = app.canvas.getBoundingClientRect();
@@ -118,7 +140,7 @@ async function boot(): Promise<void> {
     last = now;
 
     if (flow.screen === 'menu') return ui.menu();
-    if (flow.screen === 'map') return ui.map(campaign, progress.stars);
+    if (flow.screen === 'map') return showUpgrades ? ui.upgrades(meta, save.progress, save.meta) : ui.map(campaign, save.progress.stars, starsAvailable(meta, save.progress, save.meta));
     if (!sim || !loop) return;
 
     const alpha = loop.advance(dt);
@@ -136,7 +158,8 @@ async function boot(): Promise<void> {
 
     const result = flow.update(sim);
     if (result) {
-      newStars = recordResult(progress, result);
+      newStars = recordResult(save.progress, result);
+      persist();
       const name = campaign.levels.find((l) => l.id === result.levelId)?.name ?? result.levelId;
       const i = campaign.levels.findIndex((l) => l.id === result.levelId);
       // Let the banner effects play for a moment before the results card appears.
