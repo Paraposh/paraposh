@@ -53,7 +53,15 @@ export function injectEnemy(sim: Sim, defId: string, dist: number, id: number, p
 /** A sim whose scheduled wave is pushed far into the future, so tests control enemies via injectEnemy. */
 export function quietSim(mut?: (d: GameData) => void, seed = 1): Sim {
   const d = cloneData(loadData());
+  d.waves.waves = [d.waves.waves[0]!];
   d.waves.waves[0]!.groups = [{ enemyId: 'goblin_runner', count: 1, interval: 0, startDelay: 9999, path: 'main' }];
   mut?.(d);
   return new SimImpl(d, seed);
+}
+
+/** Shipped data cut down to the first wave (for tests that predate multi-wave levels). */
+export function firstWaveOnly(d: GameData): GameData {
+  const c = cloneData(d);
+  c.waves.waves = [c.waves.waves[0]!];
+  return c;
 }

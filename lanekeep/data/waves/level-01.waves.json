@@ -2,7 +2,7 @@
   "waves": [
     {
       "id": 1,
-      "preDelay": 5,
+      "preDelay": 10,
       "groups": [
         {
           "enemyId": "goblin_runner",
@@ -10,26 +10,113 @@
           "interval": 1.2,
           "startDelay": 0,
           "path": "main"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "preDelay": 25,
+      "groups": [
+        {
+          "enemyId": "goblin_runner",
+          "count": 10,
+          "interval": 1.0,
+          "startDelay": 0,
+          "path": "main"
         },
         {
           "enemyId": "armored_brute",
           "count": 2,
           "interval": 3,
-          "startDelay": 12,
+          "startDelay": 8,
+          "path": "main"
+        }
+      ]
+    },
+    {
+      "id": 3,
+      "preDelay": 25,
+      "groups": [
+        {
+          "enemyId": "goblin_runner",
+          "count": 6,
+          "interval": 0.9,
+          "startDelay": 0,
           "path": "main"
         },
         {
           "enemyId": "arcane_wisp",
-          "count": 3,
-          "interval": 1.5,
-          "startDelay": 18,
+          "count": 4,
+          "interval": 1.6,
+          "startDelay": 5,
           "path": "main"
         },
         {
           "enemyId": "cave_bat",
           "count": 3,
+          "interval": 1.4,
+          "startDelay": 12,
+          "path": "main"
+        }
+      ]
+    },
+    {
+      "id": 4,
+      "preDelay": 30,
+      "groups": [
+        {
+          "enemyId": "armored_brute",
+          "count": 4,
+          "interval": 2.8,
+          "startDelay": 0,
+          "path": "main"
+        },
+        {
+          "enemyId": "goblin_runner",
+          "count": 10,
+          "interval": 0.9,
+          "startDelay": 4,
+          "path": "main"
+        },
+        {
+          "enemyId": "arcane_wisp",
+          "count": 3,
+          "interval": 1.6,
+          "startDelay": 14,
+          "path": "main"
+        }
+      ]
+    },
+    {
+      "id": 5,
+      "preDelay": 30,
+      "groups": [
+        {
+          "enemyId": "goblin_runner",
+          "count": 12,
+          "interval": 0.8,
+          "startDelay": 0,
+          "path": "main"
+        },
+        {
+          "enemyId": "armored_brute",
+          "count": 5,
+          "interval": 2.4,
+          "startDelay": 6,
+          "path": "main"
+        },
+        {
+          "enemyId": "arcane_wisp",
+          "count": 5,
+          "interval": 1.4,
+          "startDelay": 10,
+          "path": "main"
+        },
+        {
+          "enemyId": "cave_bat",
+          "count": 5,
           "interval": 1.2,
-          "startDelay": 26,
+          "startDelay": 18,
           "path": "main"
         }
       ]

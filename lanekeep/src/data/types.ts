@@ -75,12 +75,18 @@ export interface BarracksTier {
   respawn: number;
 }
 
+/** A tier-4 branch: overrides stats of the final base tier. `cost` is paid once on specialising. */
+export type ShooterSpec = Partial<ShooterTier> & { name: string; cost: number };
+export type BarracksSpec = Partial<BarracksTier> & { name: string; cost: number };
+
 export interface ShooterTowerDef {
   family: 'rangedPhysical' | 'magic' | 'areaArtillery';
   name: string;
   antiAir: boolean;
   targeting: 'furthestAlongPath';
   tiers: ShooterTier[];
+  /** Exactly two branches, unlocked after the last base tier. */
+  specializations?: Record<string, ShooterSpec>;
 }
 
 export interface BarracksTowerDef {
@@ -88,6 +94,7 @@ export interface BarracksTowerDef {
   name: string;
   antiAir: boolean;
   tiers: BarracksTier[];
+  specializations?: Record<string, BarracksSpec>;
 }
 
 export type TowerDef = ShooterTowerDef | BarracksTowerDef;

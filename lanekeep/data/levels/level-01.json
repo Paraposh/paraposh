@@ -5,7 +5,7 @@
     "width": 1280,
     "height": 720
   },
-  "startGold": 300,
+  "startGold": 400,
   "paths": {
     "main": {
       "points": [
@@ -62,6 +62,39 @@
       "id": "s3",
       "x": 800,
       "y": 330,
+      "allowed": [
+        "archer",
+        "mage",
+        "mortar",
+        "barracks"
+      ]
+    },
+    {
+      "id": "s4",
+      "x": 620,
+      "y": 320,
+      "allowed": [
+        "archer",
+        "mage",
+        "mortar",
+        "barracks"
+      ]
+    },
+    {
+      "id": "s5",
+      "x": 1000,
+      "y": 200,
+      "allowed": [
+        "archer",
+        "mage",
+        "mortar",
+        "barracks"
+      ]
+    },
+    {
+      "id": "s6",
+      "x": 160,
+      "y": 300,
       "allowed": [
         "archer",
         "mage",

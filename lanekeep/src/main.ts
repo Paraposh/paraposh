@@ -24,6 +24,7 @@ async function boot(): Promise<void> {
   document.getElementById('game')?.appendChild(app.canvas);
   const hud = document.getElementById('hud') as HTMLElement;
   let selected = 'archer';
+  let selectedTowerId = 0;
   const rings: { x: number; y: number; r: number; age: number }[] = [];
   const g = new Graphics();
   app.stage.addChild(g);
@@ -49,12 +50,25 @@ async function boot(): Promise<void> {
     const x = ((ev.clientX - r.left) / r.width) * width;
     const y = ((ev.clientY - r.top) / r.height) * height;
     for (const s of data.level.buildSpots) {
-      if (Math.hypot(s.x - x, s.y - y) < 24) sim.queue({ type: 'placeTower', spotId: s.id, towerId: selected });
+      if (Math.hypot(s.x - x, s.y - y) >= 24) continue;
+      const here = [...sim.towers.values()].find((t) => t.spotId === s.id);
+      if (here) selectedTowerId = here.id;
+      else sim.queue({ type: 'placeTower', spotId: s.id, towerId: selected });
     }
   });
   window.addEventListener('keydown', (ev) => {
     const pick = TOWER_KEYS[ev.key.toLowerCase()];
     if (pick) selected = pick;
+    const k = ev.key.toLowerCase();
+    const sel = sim.towers.get(selectedTowerId);
+    if (k === 'n') sim.queue({ type: 'callWave' });
+    if (sel && k === 'u') sim.queue({ type: 'upgradeTower', towerId: sel.id });
+    if (sel && k === 's') sim.queue({ type: 'sellTower', towerId: sel.id });
+    if (sel && (k === 'z' || k === 'x')) {
+      const specs = Object.keys(data.towers[sel.defId]?.specializations ?? {});
+      const id = specs[k === 'z' ? 0 : 1];
+      if (id) sim.queue({ type: 'specialize', towerId: sel.id, specId: id });
+    }
     if (ev.key === ' ') loop.speed = 0;
     if (ev.key === '1') loop.speed = 1;
     if (ev.key === '2') loop.speed = 2;
@@ -100,7 +114,15 @@ async function boot(): Promise<void> {
       if (ring.age > 0.35) rings.splice(i, 1);
       else g.circle(ring.x, ring.y, ring.r * (0.4 + ring.age * 1.7)).stroke({ width: 2, color: 0xffd9a0, alpha: 1 - ring.age / 0.35 });
     }
-    hud.textContent = `gold ${sim.gold}  lives ${sim.lives}  status ${sim.status}  speed ${loop.speed}x  tower ${selected}  (Q archer 70, W mage 100, E mortar 120, R barracks 70 | click a spot to build | right-click moves rally | space = pause, 1 / 2 = speed)`;
+    const sel = sim.towers.get(selectedTowerId);
+    if (sel) g.circle(sel.x, sel.y, 24).stroke({ width: 2, color: 0xffffff });
+    const timer = sim.waveTimer;
+    const waveInfo = timer === null ? 'spawning' : `next wave in ${Math.ceil(timer / data.config.tickRate)}s (N calls it early)`;
+    const selInfo = sel
+      ? `  | selected ${sel.defId} tier ${sel.tier + 1}${sel.specId ? ' ' + sel.specId : ''} (U upgrade, Z/X specialize, S sell)`
+      : '';
+    const end = sim.status === 'won' ? `  VICTORY ${'*'.repeat(sim.stars)}` : sim.status === 'lost' ? '  DEFEAT' : '';
+    hud.textContent = `gold ${sim.gold}  lives ${sim.lives}  wave ${sim.waveIndex}/${sim.waveCount}  ${waveInfo}  speed ${loop.speed}x  build ${selected}${selInfo}${end}  (Q archer 70, W mage 100, E mortar 120, R barracks 70 | click a spot to build | right-click moves rally | space = pause, 1 / 2 = speed)`;
   });
 }
 

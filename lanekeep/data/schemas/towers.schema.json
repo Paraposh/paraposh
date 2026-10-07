@@ -160,7 +160,139 @@
         }
       },
       "specializations": {
-        "type": "object"
+        "type": "object",
+        "minProperties": 2,
+        "maxProperties": 2,
+        "additionalProperties": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name",
+            "cost"
+          ],
+          "properties": {
+            "cost": {
+              "type": "number",
+              "minimum": 0
+            },
+            "range": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "damage": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "damageType": {
+              "enum": [
+                "physical",
+                "magic",
+                "true"
+              ]
+            },
+            "cooldown": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "projectile": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "speed",
+                "lead"
+              ],
+              "properties": {
+                "speed": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "lead": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "armorPen": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "magicPen": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minRange": {
+              "type": "number",
+              "minimum": 0
+            },
+            "splash": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "radius"
+              ],
+              "properties": {
+                "radius": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            },
+            "shred": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "armor",
+                "magic",
+                "duration",
+                "maxStacks"
+              ],
+              "properties": {
+                "armor": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "magic": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "duration": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "maxStacks": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            "soldierId": {
+              "type": "string"
+            },
+            "soldierCount": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "rallyRange": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "respawn": {
+              "type": "number",
+              "minimum": 0
+            },
+            "name": {
+              "type": "string"
+            }
+          }
+        }
       }
     },
     "allOf": [

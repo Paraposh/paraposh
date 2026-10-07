@@ -9,8 +9,8 @@
         "cost": 70,
         "range": 160,
         "damage": [
-          4,
-          7
+          7,
+          13
         ],
         "damageType": "physical",
         "cooldown": 0.8,
@@ -19,8 +19,64 @@
           "lead": true
         },
         "armorPen": 0.1
+      },
+      {
+        "cost": 90,
+        "range": 170,
+        "damage": [
+          13,
+          20
+        ],
+        "damageType": "physical",
+        "cooldown": 0.75,
+        "projectile": {
+          "speed": 420,
+          "lead": true
+        },
+        "armorPen": 0.1
+      },
+      {
+        "cost": 120,
+        "range": 180,
+        "damage": [
+          20,
+          31
+        ],
+        "damageType": "physical",
+        "cooldown": 0.7,
+        "projectile": {
+          "speed": 440,
+          "lead": true
+        },
+        "armorPen": 0.15
       }
-    ]
+    ],
+    "specializations": {
+      "sharpshooter": {
+        "name": "Sharpshooter",
+        "cost": 200,
+        "range": 230,
+        "damage": [
+          68,
+          94
+        ],
+        "cooldown": 1.5,
+        "armorPen": 0.4,
+        "projectile": {
+          "speed": 700,
+          "lead": true
+        }
+      },
+      "rapidRanger": {
+        "name": "Rapid Ranger",
+        "cost": 180,
+        "damage": [
+          16,
+          23
+        ],
+        "cooldown": 0.35
+      }
+    }
   },
   "mage": {
     "family": "magic",
@@ -32,8 +88,8 @@
         "cost": 100,
         "range": 150,
         "damage": [
-          10,
-          18
+          17,
+          31
         ],
         "damageType": "magic",
         "cooldown": 1.2,
@@ -42,13 +98,81 @@
           "lead": true
         },
         "shred": {
-          "armor": 0.0,
+          "armor": 0,
           "magic": 0.05,
           "duration": 3,
           "maxStacks": 4
         }
+      },
+      {
+        "cost": 130,
+        "range": 160,
+        "damage": [
+          31,
+          48
+        ],
+        "damageType": "magic",
+        "cooldown": 1.2,
+        "projectile": {
+          "speed": 360,
+          "lead": true
+        },
+        "shred": {
+          "armor": 0,
+          "magic": 0.06,
+          "duration": 3,
+          "maxStacks": 4
+        }
+      },
+      {
+        "cost": 160,
+        "range": 170,
+        "damage": [
+          48,
+          68
+        ],
+        "damageType": "magic",
+        "cooldown": 1.1,
+        "projectile": {
+          "speed": 370,
+          "lead": true
+        },
+        "shred": {
+          "armor": 0,
+          "magic": 0.07,
+          "duration": 3,
+          "maxStacks": 5
+        }
       }
-    ]
+    ],
+    "specializations": {
+      "archmage": {
+        "name": "Archmage",
+        "cost": 240,
+        "range": 190,
+        "damage": [
+          128,
+          178
+        ],
+        "cooldown": 1.8,
+        "magicPen": 0.2
+      },
+      "hexer": {
+        "name": "Hexer",
+        "cost": 220,
+        "damage": [
+          34,
+          51
+        ],
+        "cooldown": 0.8,
+        "shred": {
+          "armor": 0.1,
+          "magic": 0.1,
+          "duration": 4,
+          "maxStacks": 6
+        }
+      }
+    }
   },
   "mortar": {
     "family": "areaArtillery",
@@ -59,10 +183,9 @@
       {
         "cost": 120,
         "range": 220,
-        "minRange": 60,
         "damage": [
-          20,
-          35
+          32,
+          56
         ],
         "damageType": "physical",
         "cooldown": 3.0,
@@ -70,17 +193,98 @@
           "speed": 250,
           "lead": true
         },
+        "minRange": 60,
         "splash": {
           "radius": 55
         },
         "shred": {
           "armor": 0.05,
-          "magic": 0.0,
+          "magic": 0,
+          "duration": 4,
+          "maxStacks": 3
+        }
+      },
+      {
+        "cost": 140,
+        "range": 230,
+        "damage": [
+          54,
+          83
+        ],
+        "damageType": "physical",
+        "cooldown": 3.0,
+        "projectile": {
+          "speed": 260,
+          "lead": true
+        },
+        "minRange": 60,
+        "splash": {
+          "radius": 60
+        },
+        "shred": {
+          "armor": 0.05,
+          "magic": 0,
+          "duration": 4,
+          "maxStacks": 3
+        }
+      },
+      {
+        "cost": 170,
+        "range": 240,
+        "damage": [
+          83,
+          125
+        ],
+        "damageType": "physical",
+        "cooldown": 2.8,
+        "projectile": {
+          "speed": 270,
+          "lead": true
+        },
+        "minRange": 60,
+        "splash": {
+          "radius": 65
+        },
+        "shred": {
+          "armor": 0.06,
+          "magic": 0,
           "duration": 4,
           "maxStacks": 3
         }
       }
-    ]
+    ],
+    "specializations": {
+      "bombard": {
+        "name": "Bombard",
+        "cost": 260,
+        "damage": [
+          240,
+          352
+        ],
+        "cooldown": 5.0,
+        "splash": {
+          "radius": 70
+        }
+      },
+      "clusterMortar": {
+        "name": "Cluster Mortar",
+        "cost": 240,
+        "damage": [
+          38,
+          58
+        ],
+        "cooldown": 2.0,
+        "splash": {
+          "radius": 95
+        },
+        "shred": {
+          "armor": 0.08,
+          "magic": 0,
+          "duration": 4,
+          "maxStacks": 4
+        }
+      }
+    }
   },
   "barracks": {
     "family": "meleeBarracks",
@@ -93,7 +297,36 @@
         "soldierCount": 3,
         "rallyRange": 120,
         "respawn": 10
+      },
+      {
+        "cost": 90,
+        "soldierId": "veteran",
+        "soldierCount": 3,
+        "rallyRange": 125,
+        "respawn": 9
+      },
+      {
+        "cost": 120,
+        "soldierId": "captain",
+        "soldierCount": 3,
+        "rallyRange": 130,
+        "respawn": 8
       }
-    ]
+    ],
+    "specializations": {
+      "phalanx": {
+        "name": "Phalanx",
+        "cost": 200,
+        "soldierId": "shieldbearer",
+        "soldierCount": 3
+      },
+      "skirmishers": {
+        "name": "Skirmishers",
+        "cost": 200,
+        "soldierId": "raider",
+        "soldierCount": 5,
+        "respawn": 7
+      }
+    }
   }
 }
