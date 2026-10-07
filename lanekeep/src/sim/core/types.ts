@@ -1,4 +1,4 @@
-import type { DamageType } from '../../data/types';
+import type { DamageType, ShredDef } from '../../data/types';
 
 export type Command = { type: 'placeTower'; spotId: string; towerId: string };
 
@@ -17,6 +17,12 @@ export interface Enemy {
   y: number;
   prevX: number;
   prevY: number;
+  /** Armor removed by active shred stacks (fraction points). */
+  shredArmor: number;
+  shredMagic: number;
+  shredStacks: number;
+  /** Ticks until shred falls off. */
+  shredTicks: number;
 }
 
 export interface Tower {
@@ -43,6 +49,12 @@ export interface Projectile {
   ticksLeft: number;
   damage: number;
   damageType: DamageType;
+  armorPen: number;
+  magicPen: number;
+  /** 0 = single target. */
+  splashRadius: number;
+  antiAir: boolean;
+  shred?: ShredDef;
 }
 
 export type SimEvent =
@@ -52,6 +64,7 @@ export type SimEvent =
   | { type: 'towerPlaced'; tick: number; id: number }
   | { type: 'projectileFired'; tick: number; id: number }
   | { type: 'projectileHit'; tick: number; id: number; targetId: number; damage: number }
+  | { type: 'splashImpact'; tick: number; x: number; y: number; radius: number }
   | { type: 'commandRejected'; tick: number; reason: string }
   | { type: 'won'; tick: number }
   | { type: 'lost'; tick: number };

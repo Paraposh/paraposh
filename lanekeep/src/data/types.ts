@@ -30,6 +30,20 @@ export interface EnemyDef {
   traits: { type: string }[];
 }
 
+export interface ShredDef {
+  /** Armor removed per stack (fraction points). */
+  armor: number;
+  /** Magic resist removed per stack (fraction points). */
+  magic: number;
+  /** Seconds before all stacks fall off; refreshed on every application. */
+  duration: number;
+  maxStacks: number;
+}
+
+export interface SplashDef {
+  radius: number;
+}
+
 export interface TowerTier {
   cost: number;
   range: number;
@@ -37,6 +51,14 @@ export interface TowerTier {
   damageType: DamageType;
   cooldown: number;
   projectile: { speed: number; lead: boolean };
+  /** Armor ignored by this tower's hits (fraction points, applied on top of shred). */
+  armorPen?: number;
+  /** Magic resist ignored by this tower's hits (fraction points). */
+  magicPen?: number;
+  /** Targets closer than this are not eligible (artillery). */
+  minRange?: number;
+  splash?: SplashDef;
+  shred?: ShredDef;
 }
 
 export interface TowerDef {

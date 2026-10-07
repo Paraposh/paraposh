@@ -10,5 +10,41 @@
     "flying": false,
     "radius": 10,
     "traits": []
+  },
+  "armored_brute": {
+    "name": "Armored Brute",
+    "hp": 220,
+    "speed": 35,
+    "armor": 0.5,
+    "magicResist": 0.0,
+    "bounty": 15,
+    "livesCost": 2,
+    "flying": false,
+    "radius": 13,
+    "traits": []
+  },
+  "arcane_wisp": {
+    "name": "Arcane Wisp",
+    "hp": 80,
+    "speed": 50,
+    "armor": 0.0,
+    "magicResist": 0.6,
+    "bounty": 10,
+    "livesCost": 1,
+    "flying": false,
+    "radius": 9,
+    "traits": []
+  },
+  "cave_bat": {
+    "name": "Cave Bat",
+    "hp": 50,
+    "speed": 70,
+    "armor": 0.0,
+    "magicResist": 0.0,
+    "bounty": 8,
+    "livesCost": 1,
+    "flying": true,
+    "radius": 8,
+    "traits": []
   }
 }

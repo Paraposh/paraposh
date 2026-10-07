@@ -1,7 +1,8 @@
-import type { GameData } from '../data/types';
+import type { GameData, ShredDef } from '../data/types';
 import { Rng } from './core/rng';
 import type { Command, Enemy, Projectile, SimEvent, SimStatus, Tower } from './core/types';
 import { damageAfterResist } from './math/damage';
+import { splashFactor } from './math/splash';
 import { leadIntercept } from './math/lead';
 import { SplinePath } from './math/spline';
 
@@ -63,6 +64,7 @@ export class Sim {
     if (this.status === 'won' || this.status === 'lost') return;
     this.applyCommands();
     this.spawnSystem();
+    this.statusSystem();
     this.movementSystem();
     this.towerSystem();
     this.projectileSystem();
@@ -80,7 +82,7 @@ export class Sim {
     mix(this.gold);
     mix(this.lives);
     mix(this.rng.state);
-    for (const e of this.enemies.values()) (mix(e.id), mix(e.dist), mix(e.hp), mix(e.laneOffset));
+    for (const e of this.enemies.values()) (mix(e.id), mix(e.dist), mix(e.hp), mix(e.laneOffset), mix(e.shredStacks), mix(e.shredTicks));
     for (const t of this.towers.values()) (mix(t.id), mix(t.cooldown), mix(t.tier));
     for (const p of this.projectiles.values()) (mix(p.id), mix(p.x), mix(p.y), mix(p.ticksLeft));
     return h >>> 0;
@@ -175,12 +177,26 @@ export class Sim {
         y: 0,
         prevX: 0,
         prevY: 0,
+        shredArmor: 0,
+        shredMagic: 0,
+        shredStacks: 0,
+        shredTicks: 0,
       };
       [enemy.x, enemy.y] = this.positionAt(enemy, 0);
       enemy.prevX = enemy.x;
       enemy.prevY = enemy.y;
       this.enemies.set(enemy.id, enemy);
       this.emit({ type: 'enemySpawned', tick: this.tick, id: enemy.id });
+    }
+  }
+
+  private statusSystem(): void {
+    for (const e of this.enemies.values()) {
+      if (e.shredTicks > 0 && --e.shredTicks === 0) {
+        e.shredArmor = 0;
+        e.shredMagic = 0;
+        e.shredStacks = 0;
+      }
     }
   }
 
@@ -217,12 +233,14 @@ export class Sim {
       // Default targeting: furthest along the path within range. Ties go to the lowest id (iteration order).
       let target: Enemy | undefined;
       const r2 = tier.range * tier.range;
+      const minR2 = (tier.minRange ?? 0) * (tier.minRange ?? 0);
       for (const e of this.enemies.values()) {
         const eDef = this.data.enemies[e.defId];
         if (!eDef || (eDef.flying && !def.antiAir)) continue;
         const dx = e.x - tower.x;
         const dy = e.y - tower.y;
-        if (dx * dx + dy * dy > r2) continue;
+        const d2 = dx * dx + dy * dy;
+        if (d2 > r2 || d2 < minR2) continue;
         if (!target || e.dist > target.dist) target = e;
       }
       if (!target) continue;
@@ -255,6 +273,11 @@ export class Sim {
         ticksLeft: Math.max(1, Math.ceil(aimed.t * cfg.tickRate)),
         damage: this.rng.range(tier.damage[0], tier.damage[1]),
         damageType: tier.damageType,
+        armorPen: tier.armorPen ?? 0,
+        magicPen: tier.magicPen ?? 0,
+        splashRadius: tier.splash?.radius ?? 0,
+        antiAir: def.antiAir,
+        shred: tier.shred,
       };
       this.projectiles.set(proj.id, proj);
       tower.cooldown = Math.max(1, this.ticks(tier.cooldown));
@@ -271,19 +294,46 @@ export class Sim {
       p.ticksLeft--;
       if (p.ticksLeft > 0) continue;
       this.projectiles.delete(p.id);
-      const target = this.enemies.get(p.targetId);
-      if (!target) continue; // target died or leaked in flight: projectile fizzles
-      const def = this.data.enemies[target.defId];
-      if (!def) continue;
-      const dealt = damageAfterResist(p.damage, p.damageType, def.armor, def.magicResist, this.data.config);
-      target.hp -= dealt;
-      this.emit({ type: 'projectileHit', tick: this.tick, id: p.id, targetId: target.id, damage: dealt });
-      if (target.hp <= 0) {
-        this.enemies.delete(target.id);
-        this.gold += def.bounty;
-        this.emit({ type: 'enemyKilled', tick: this.tick, id: target.id, gold: def.bounty });
+      if (p.splashRadius > 0) {
+        this.emit({ type: 'splashImpact', tick: this.tick, x: p.x, y: p.y, radius: p.splashRadius });
+        for (const e of [...this.enemies.values()]) {
+          const def = this.data.enemies[e.defId];
+          if (!def || (def.flying && !p.antiAir)) continue;
+          const f = splashFactor(Math.hypot(e.x - p.x, e.y - p.y), p.splashRadius, this.data.config.splashEdgeMult);
+          if (f > 0) this.hitEnemy(e, p, f);
+        }
+      } else {
+        const target = this.enemies.get(p.targetId);
+        if (target) this.hitEnemy(target, p, 1); // target died or leaked in flight: projectile fizzles
       }
     }
+  }
+
+  /** Applies one projectile hit (scaled by factor) including resist, penetration, shred, bounty. */
+  private hitEnemy(e: Enemy, p: Projectile, factor: number): void {
+    const def = this.data.enemies[e.defId];
+    if (!def) return;
+    const dealt = damageAfterResist(p.damage * factor, p.damageType, def.armor, def.magicResist, this.data.config, {
+      armorReduction: e.shredArmor + p.armorPen,
+      magicReduction: e.shredMagic + p.magicPen,
+    });
+    e.hp -= dealt;
+    this.emit({ type: 'projectileHit', tick: this.tick, id: p.id, targetId: e.id, damage: dealt });
+    if (e.hp <= 0) {
+      this.enemies.delete(e.id);
+      this.gold += def.bounty;
+      this.emit({ type: 'enemyKilled', tick: this.tick, id: e.id, gold: def.bounty });
+    } else if (p.shred) {
+      this.applyShred(e, p.shred);
+    }
+  }
+
+  /** Shred lands after the damage of the hit that applied it. */
+  private applyShred(e: Enemy, s: ShredDef): void {
+    e.shredStacks = Math.min(e.shredStacks + 1, s.maxStacks);
+    e.shredArmor = e.shredStacks * s.armor;
+    e.shredMagic = e.shredStacks * s.magic;
+    e.shredTicks = Math.max(1, this.ticks(s.duration));
   }
 
   private endCheck(): void {

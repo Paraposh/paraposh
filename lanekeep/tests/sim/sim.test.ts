@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
+import type { GameData } from '../../src/data/types';
 import { Sim } from '../../src/sim/sim';
 import { cloneData, loadData, runUntil } from '../helpers';
+
+const totalLivesCost = (d: GameData): number =>
+  (d.waves.waves[0] as { groups: { enemyId: string; count: number }[] }).groups.reduce(
+    (sum, g) => sum + g.count * (d.enemies[g.enemyId] as { livesCost: number }).livesCost,
+    0,
+  );
 
 const place = (sim: Sim, spotId = 's1') => sim.queue({ type: 'placeTower', spotId, towerId: 'archer' });
 
@@ -8,7 +15,7 @@ describe('milestone (a): one path, one enemy, one tower', () => {
   it('without towers every enemy leaks and the level is lost or won with lives spent', () => {
     const sim = new Sim(loadData(), 1);
     runUntil(sim, 60 * 120);
-    expect(sim.lives).toBe(20 - 8);
+    expect(sim.lives).toBe(20 - totalLivesCost(loadData()));
     expect(sim.enemies.size).toBe(0);
     expect(sim.status).toBe('won'); // wave cleared, lives still > 0
   });
@@ -50,7 +57,7 @@ describe('milestone (a): one path, one enemy, one tower', () => {
     runUntil(sim, 60 * 120);
     const kills = sim.commandLog.length; // 2 placements logged
     expect(kills).toBe(2);
-    expect(sim.lives).toBeGreaterThan(12);
+    expect(sim.lives).toBeGreaterThan(20 - totalLivesCost(loadData()));
     expect(sim.gold).toBeGreaterThan(300 - 140);
   });
 
@@ -62,7 +69,7 @@ describe('milestone (a): one path, one enemy, one tower', () => {
     // inject two enemies near the tower with different progress
     const mk = (dist: number) => {
       const id = 9000 + dist;
-      const e = { id, defId: 'goblin_runner', pathId: 'main', laneOffset: 0, dist, hp: 60, maxHp: 60, x: 0, y: 0, prevX: 0, prevY: 0 };
+      const e = { id, defId: 'goblin_runner', pathId: 'main', laneOffset: 0, dist, hp: 60, maxHp: 60, x: 0, y: 0, prevX: 0, prevY: 0, shredArmor: 0, shredMagic: 0, shredStacks: 0, shredTicks: 0 };
       [e.x, e.y] = sim.positionAt(e, dist);
       sim.enemies.set(id, e);
       return e;
@@ -95,6 +102,7 @@ describe('milestone (a): one path, one enemy, one tower', () => {
     const hit = (armor: number) => {
       const d = cloneData(loadData());
       d.enemies['goblin_runner']!.armor = armor;
+      d.towers['archer']!.tiers[0]!.armorPen = 0;
       d.enemies['goblin_runner']!.hp = 10000;
       const sim = new Sim(d, 5);
       place(sim, 's1');

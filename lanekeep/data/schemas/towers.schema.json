@@ -3,31 +3,156 @@
   "additionalProperties": {
     "type": "object",
     "additionalProperties": false,
-    "required": ["family","name","antiAir","targeting","tiers"],
+    "required": [
+      "family",
+      "name",
+      "antiAir",
+      "targeting",
+      "tiers"
+    ],
     "properties": {
-      "family": { "enum": ["rangedPhysical","meleeBarracks","magic","areaArtillery"] },
-      "name": { "type": "string" },
-      "antiAir": { "type": "boolean" },
-      "targeting": { "enum": ["furthestAlongPath"] },
+      "family": {
+        "enum": [
+          "rangedPhysical",
+          "meleeBarracks",
+          "magic",
+          "areaArtillery"
+        ]
+      },
+      "name": {
+        "type": "string"
+      },
+      "antiAir": {
+        "type": "boolean"
+      },
+      "targeting": {
+        "enum": [
+          "furthestAlongPath"
+        ]
+      },
       "tiers": {
-        "type": "array", "minItems": 1,
+        "type": "array",
+        "minItems": 1,
         "items": {
-          "type": "object", "additionalProperties": false,
-          "required": ["cost","range","damage","damageType","cooldown","projectile"],
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "cost",
+            "range",
+            "damage",
+            "damageType",
+            "cooldown",
+            "projectile"
+          ],
           "properties": {
-            "cost": { "type": "number", "minimum": 0 },
-            "range": { "type": "number", "exclusiveMinimum": 0 },
-            "damage": { "type": "array", "minItems": 2, "maxItems": 2, "items": { "type": "number", "minimum": 0 } },
-            "damageType": { "enum": ["physical","magic","true"] },
-            "cooldown": { "type": "number", "exclusiveMinimum": 0 },
+            "cost": {
+              "type": "number",
+              "minimum": 0
+            },
+            "range": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "damage": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number",
+                "minimum": 0
+              }
+            },
+            "damageType": {
+              "enum": [
+                "physical",
+                "magic",
+                "true"
+              ]
+            },
+            "cooldown": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
             "projectile": {
-              "type": "object", "additionalProperties": false, "required": ["speed","lead"],
-              "properties": { "speed": { "type": "number", "exclusiveMinimum": 0 }, "lead": { "type": "boolean" } }
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "speed",
+                "lead"
+              ],
+              "properties": {
+                "speed": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "lead": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "armorPen": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "magicPen": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 1
+            },
+            "minRange": {
+              "type": "number",
+              "minimum": 0
+            },
+            "splash": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "radius"
+              ],
+              "properties": {
+                "radius": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            },
+            "shred": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "armor",
+                "magic",
+                "duration",
+                "maxStacks"
+              ],
+              "properties": {
+                "armor": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "magic": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "duration": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "maxStacks": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
             }
           }
         }
       },
-      "specializations": { "type": "object" }
+      "specializations": {
+        "type": "object"
+      }
     }
   }
 }

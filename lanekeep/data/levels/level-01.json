@@ -41,7 +41,9 @@
       "x": 420,
       "y": 300,
       "allowed": [
-        "archer"
+        "archer",
+        "mage",
+        "mortar"
       ]
     },
     {
@@ -49,7 +51,9 @@
       "x": 700,
       "y": 160,
       "allowed": [
-        "archer"
+        "archer",
+        "mage",
+        "mortar"
       ]
     },
     {
@@ -57,12 +61,16 @@
       "x": 800,
       "y": 330,
       "allowed": [
-        "archer"
+        "archer",
+        "mage",
+        "mortar"
       ]
     }
   ],
   "availableTowers": [
-    "archer"
+    "archer",
+    "mage",
+    "mortar"
   ],
   "heroSpawn": [
     200,

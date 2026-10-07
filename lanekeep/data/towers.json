@@ -8,10 +8,77 @@
       {
         "cost": 70,
         "range": 160,
-        "damage": [4, 7],
+        "damage": [
+          4,
+          7
+        ],
         "damageType": "physical",
         "cooldown": 0.8,
-        "projectile": { "speed": 400, "lead": true }
+        "projectile": {
+          "speed": 400,
+          "lead": true
+        },
+        "armorPen": 0.1
+      }
+    ]
+  },
+  "mage": {
+    "family": "magic",
+    "name": "Mage Tower",
+    "antiAir": true,
+    "targeting": "furthestAlongPath",
+    "tiers": [
+      {
+        "cost": 100,
+        "range": 150,
+        "damage": [
+          10,
+          18
+        ],
+        "damageType": "magic",
+        "cooldown": 1.2,
+        "projectile": {
+          "speed": 350,
+          "lead": true
+        },
+        "shred": {
+          "armor": 0.0,
+          "magic": 0.05,
+          "duration": 3,
+          "maxStacks": 4
+        }
+      }
+    ]
+  },
+  "mortar": {
+    "family": "areaArtillery",
+    "name": "Mortar Battery",
+    "antiAir": false,
+    "targeting": "furthestAlongPath",
+    "tiers": [
+      {
+        "cost": 120,
+        "range": 220,
+        "minRange": 60,
+        "damage": [
+          20,
+          35
+        ],
+        "damageType": "physical",
+        "cooldown": 3.0,
+        "projectile": {
+          "speed": 250,
+          "lead": true
+        },
+        "splash": {
+          "radius": 55
+        },
+        "shred": {
+          "armor": 0.05,
+          "magic": 0.0,
+          "duration": 4,
+          "maxStacks": 3
+        }
       }
     ]
   }
