@@ -2,7 +2,11 @@ import type { DamageType, ShredDef } from '../../data/types';
 
 export type Command =
   | { type: 'placeTower'; spotId: string; towerId: string }
-  | { type: 'setRally'; towerId: number; x: number; y: number };
+  | { type: 'setRally'; towerId: number; x: number; y: number }
+  | { type: 'upgradeTower'; towerId: number }
+  | { type: 'specialize'; towerId: number; specId: string }
+  | { type: 'sellTower'; towerId: number }
+  | { type: 'callWave' };
 
 export type SimStatus = 'prepare' | 'wave' | 'won' | 'lost';
 
@@ -37,7 +41,10 @@ export interface Tower {
   spotId: string;
   x: number;
   y: number;
+  /** Index into the base tiers. */
   tier: number;
+  /** Chosen specialization id, or '' for none. */
+  specId: string;
   /** Ticks until the tower may fire again. */
   cooldown: number;
   invested: number;
@@ -91,6 +98,10 @@ export type SimEvent =
   | { type: 'towerPlaced'; tick: number; id: number }
   | { type: 'projectileFired'; tick: number; id: number }
   | { type: 'projectileHit'; tick: number; id: number; targetId: number; damage: number }
+  | { type: 'waveStarted'; tick: number; index: number }
+  | { type: 'waveCalled'; tick: number; index: number; secondsSkipped: number; bonus: number }
+  | { type: 'towerUpgraded'; tick: number; id: number; tier: number; specId: string }
+  | { type: 'towerSold'; tick: number; id: number; refund: number }
   | { type: 'soldierSpawned'; tick: number; id: number }
   | { type: 'soldierKilled'; tick: number; id: number }
   | { type: 'meleeHit'; tick: number; attackerId: number; targetId: number; damage: number; onSoldier: boolean }

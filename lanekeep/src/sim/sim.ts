@@ -1,4 +1,4 @@
-import type { GameData, ShredDef, SoldierDef, DamageType, BarracksTier } from '../data/types';
+import type { BarracksTier, DamageType, GameData, ShooterTier, ShredDef, SoldierDef } from '../data/types';
 import { Rng } from './core/rng';
 import type { Command, Enemy, Projectile, SimEvent, SimStatus, Soldier, Tower } from './core/types';
 import { damageAfterResist } from './math/damage';
@@ -7,6 +7,7 @@ import { splashFactor } from './math/splash';
 import { SplinePath } from './math/spline';
 
 interface SpawnEntry {
+  /** Absolute tick once started; offset from wave start inside `waveEntries`. */
   tick: number;
   enemyId: string;
   pathId: string;
@@ -29,8 +30,13 @@ export class Sim {
   private events: SimEvent[] = [];
   private pending: Command[] = [];
   private nextId = 1;
-  private readonly schedule: SpawnEntry[];
-  private spawnIdx = 0;
+  private readonly waveEntries: SpawnEntry[][];
+  private pendingSpawns: SpawnEntry[] = [];
+  /** Index of the next wave to start. */
+  waveIndex = 0;
+  /** Absolute tick at which the next wave starts, or null while the current wave is still spawning. */
+  private nextWaveTick: number | null;
+  private spawnWatch: number | null = null;
 
   constructor(
     readonly data: GameData,
@@ -42,7 +48,34 @@ export class Sim {
     for (const [id, p] of Object.entries(data.level.paths)) {
       this.paths[id] = new SplinePath(p.points, p.spline, data.config.pathSamplesPerSegment);
     }
-    this.schedule = this.buildSchedule();
+    this.waveEntries = this.buildWaveEntries();
+    const first = data.waves.waves[0];
+    this.nextWaveTick = first ? this.ticks(first.preDelay) : null;
+  }
+
+  /** Ticks until the next wave starts, or null while the current wave is still spawning. */
+  get waveTimer(): number | null {
+    return this.nextWaveTick === null ? null : Math.max(0, this.nextWaveTick - this.tick);
+  }
+
+  get waveCount(): number {
+    return this.data.waves.waves.length;
+  }
+
+  /** Stars for a finished level: highest threshold whose minLives the player met. 0 on a loss. */
+  get stars(): number {
+    if (this.status !== 'won') return 0;
+    return this.data.config.stars.filter((s) => this.lives >= s.minLives).reduce((m, s) => Math.max(m, s.stars), 0);
+  }
+
+  /** Effective stats of a barracks/shooter tower: base tier merged with its specialization, if any. */
+  tierOf(tower: Tower): ShooterTier | BarracksTier {
+    const def = this.data.towers[tower.defId];
+    const base = (def?.tiers[tower.tier] ?? def?.tiers[0]) as ShooterTier | BarracksTier;
+    const spec = tower.specId ? def?.specializations?.[tower.specId] : undefined;
+    if (!spec) return base;
+    const { name: _name, ...overrides } = spec;
+    return { ...base, ...overrides } as ShooterTier | BarracksTier;
   }
 
   /** Seconds (from data) to whole ticks. */
@@ -64,6 +97,7 @@ export class Sim {
   step(): void {
     if (this.status === 'won' || this.status === 'lost') return;
     this.applyCommands();
+    this.waveSystem();
     this.spawnSystem();
     this.statusSystem();
     this.barracksSystem();
@@ -86,6 +120,8 @@ export class Sim {
     mix(this.gold);
     mix(this.lives);
     mix(this.rng.state);
+    mix(this.waveIndex);
+    mix(this.nextWaveTick ?? -1);
     for (const e of this.enemies.values()) {
       mix(e.id);
       mix(e.dist);
@@ -95,7 +131,7 @@ export class Sim {
       mix(e.shredTicks);
       mix(e.blockers.length);
     }
-    for (const t of this.towers.values()) (mix(t.id), mix(t.cooldown), mix(t.tier), mix(t.rallyX), mix(t.rallyY));
+    for (const t of this.towers.values()) (mix(t.id), mix(t.cooldown), mix(t.tier), mix(t.specId.length), mix(t.rallyX), mix(t.rallyY));
     for (const s of this.soldiers.values()) (mix(s.id), mix(s.x), mix(s.y), mix(s.hp), mix(s.targetId));
     for (const p of this.projectiles.values()) (mix(p.id), mix(p.x), mix(p.y), mix(p.ticksLeft));
     return h >>> 0;
@@ -112,25 +148,44 @@ export class Sim {
     this.events.push(e);
   }
 
-  private buildSchedule(): SpawnEntry[] {
-    // Milestone (a)-(c): only the first wave, auto-started. Wave sequencing/economy arrive in (d).
-    const wave = this.data.waves.waves[0];
-    if (!wave) return [];
-    const out: (SpawnEntry & { order: number })[] = [];
-    const base = this.ticks(wave.preDelay);
-    let order = 0;
-    for (const g of wave.groups) {
-      for (let k = 0; k < g.count; k++) {
-        out.push({
-          tick: base + this.ticks(g.startDelay) + this.ticks(g.interval * k),
-          enemyId: g.enemyId,
-          pathId: g.path,
-          order: order++,
-        });
+  private buildWaveEntries(): SpawnEntry[][] {
+    return this.data.waves.waves.map((wave) => {
+      const out: (SpawnEntry & { order: number })[] = [];
+      let order = 0;
+      for (const g of wave.groups) {
+        for (let k = 0; k < g.count; k++) {
+          out.push({
+            tick: this.ticks(g.startDelay) + this.ticks(g.interval * k),
+            enemyId: g.enemyId,
+            pathId: g.path,
+            order: order++,
+          });
+        }
       }
+      out.sort((x, y) => x.tick - y.tick || x.order - y.order);
+      return out;
+    });
+  }
+
+  private waveSystem(): void {
+    if (this.spawnWatch !== null && this.tick >= this.spawnWatch) {
+      this.spawnWatch = null;
+      const next = this.data.waves.waves[this.waveIndex];
+      this.nextWaveTick = next ? this.tick + this.ticks(next.preDelay) : null;
     }
-    out.sort((a, b) => a.tick - b.tick || a.order - b.order);
-    return out;
+    if (this.nextWaveTick !== null && this.tick >= this.nextWaveTick) this.startNextWave();
+  }
+
+  private startNextWave(): void {
+    const entries = this.waveEntries[this.waveIndex] ?? [];
+    const index = this.waveIndex++;
+    this.nextWaveTick = null;
+    this.status = 'wave';
+    for (const e of entries) this.pendingSpawns.push({ ...e, tick: this.tick + e.tick });
+    this.pendingSpawns.sort((x, y) => x.tick - y.tick); // stable: ties keep wave/group order
+    const last = entries[entries.length - 1];
+    this.spawnWatch = this.tick + (last ? last.tick : 0);
+    this.emit({ type: 'waveStarted', tick: this.tick, index });
   }
 
   // ---------------------------------------------------------------- commands
@@ -141,6 +196,10 @@ export class Sim {
     for (const cmd of cmds) {
       if (cmd.type === 'placeTower') this.placeTower(cmd.spotId, cmd.towerId);
       else if (cmd.type === 'setRally') this.setRally(cmd.towerId, cmd.x, cmd.y);
+      else if (cmd.type === 'upgradeTower') this.upgradeTower(cmd.towerId);
+      else if (cmd.type === 'specialize') this.specialize(cmd.towerId, cmd.specId);
+      else if (cmd.type === 'sellTower') this.sellTower(cmd.towerId);
+      else if (cmd.type === 'callWave') this.callWave();
     }
   }
 
@@ -164,6 +223,7 @@ export class Sim {
       x: spot.x,
       y: spot.y,
       tier: 0,
+      specId: '',
       cooldown: 0,
       invested: cost,
       rallyX: spot.x,
@@ -197,7 +257,7 @@ export class Sim {
     const def = tower && this.data.towers[tower.defId];
     const reject = (reason: string) => this.emit({ type: 'commandRejected', tick: this.tick, reason });
     if (!tower || !def || def.family !== 'meleeBarracks') return reject('not a barracks');
-    const range = (def.tiers[tower.tier] as BarracksTier).rallyRange;
+    const range = (this.tierOf(tower) as BarracksTier).rallyRange;
     const d = Math.hypot(x - tower.x, y - tower.y);
     // Clamp into range rather than reject, so a slightly-far click still does something useful.
     const k = d > range ? range / d : 1;
@@ -205,12 +265,86 @@ export class Sim {
     tower.rallyY = tower.y + (y - tower.y) * k;
   }
 
+  private reject(reason: string): void {
+    this.emit({ type: 'commandRejected', tick: this.tick, reason });
+  }
+
+  /** Buy the next base tier. Specializations are a separate command once the last base tier is reached. */
+  private upgradeTower(towerId: number): void {
+    const tower = this.towers.get(towerId);
+    const def = tower && this.data.towers[tower.defId];
+    if (!tower || !def) return this.reject('unknown tower');
+    if (tower.specId) return this.reject('already specialized');
+    const next = def.tiers[tower.tier + 1];
+    if (!next) return this.reject('final tier: specialize instead');
+    if (this.gold < next.cost) return this.reject('not enough gold');
+    this.gold -= next.cost;
+    tower.invested += next.cost;
+    tower.tier++;
+    this.refreshBarracks(tower);
+    this.emit({ type: 'towerUpgraded', tick: this.tick, id: tower.id, tier: tower.tier, specId: '' });
+  }
+
+  private specialize(towerId: number, specId: string): void {
+    const tower = this.towers.get(towerId);
+    const def = tower && this.data.towers[tower.defId];
+    if (!tower || !def) return this.reject('unknown tower');
+    if (tower.specId) return this.reject('already specialized');
+    if (tower.tier !== def.tiers.length - 1) return this.reject('upgrade to the final tier first');
+    const spec = def.specializations?.[specId];
+    if (!spec) return this.reject(`unknown specialization ${specId}`);
+    if (this.gold < spec.cost) return this.reject('not enough gold');
+    this.gold -= spec.cost;
+    tower.invested += spec.cost;
+    tower.specId = specId;
+    this.refreshBarracks(tower);
+    this.emit({ type: 'towerUpgraded', tick: this.tick, id: tower.id, tier: tower.tier, specId });
+  }
+
+  /** After a barracks changes tier/spec its soldiers are replaced at once by the new type and count. */
+  private refreshBarracks(tower: Tower): void {
+    const def = this.data.towers[tower.defId];
+    if (!def || def.family !== 'meleeBarracks') return;
+    for (const s of [...this.soldiers.values()]) {
+      if (s.towerId !== tower.id) continue;
+      this.releaseTarget(s);
+      this.soldiers.delete(s.id);
+    }
+    const count = (this.tierOf(tower) as BarracksTier).soldierCount;
+    tower.slots = Array.from({ length: count }, () => ({ soldierId: 0, respawn: 0 }));
+  }
+
+  private sellTower(towerId: number): void {
+    const tower = this.towers.get(towerId);
+    if (!tower) return this.reject('unknown tower');
+    const refund = Math.floor(tower.invested * this.data.config.sellRefundPct);
+    for (const s of [...this.soldiers.values()]) {
+      if (s.towerId !== tower.id) continue;
+      this.releaseTarget(s);
+      this.soldiers.delete(s.id);
+    }
+    this.towers.delete(tower.id);
+    this.gold += refund;
+    this.emit({ type: 'towerSold', tick: this.tick, id: tower.id, refund });
+  }
+
+  /** Starts the next wave now. Bonus gold is the time skipped times earlyCallGoldPerSec, capped. */
+  private callWave(): void {
+    const remaining = this.waveTimer;
+    if (remaining === null || remaining <= 0) return this.reject('no wave to call');
+    const secondsSkipped = remaining / this.data.config.tickRate;
+    const cfg = this.data.config;
+    const bonus = Math.min(Math.floor(secondsSkipped * cfg.earlyCallGoldPerSec), cfg.earlyCallMaxBonus);
+    this.gold += bonus;
+    this.nextWaveTick = this.tick;
+    this.emit({ type: 'waveCalled', tick: this.tick, index: this.waveIndex, secondsSkipped, bonus });
+  }
+
   // ------------------------------------------------------------------ enemies
 
   private spawnSystem(): void {
-    while (this.spawnIdx < this.schedule.length && (this.schedule[this.spawnIdx] as SpawnEntry).tick <= this.tick) {
-      const entry = this.schedule[this.spawnIdx++] as SpawnEntry;
-      this.status = 'wave';
+    while (this.pendingSpawns.length > 0 && (this.pendingSpawns[0] as SpawnEntry).tick <= this.tick) {
+      const entry = this.pendingSpawns.shift() as SpawnEntry;
       const def = this.data.enemies[entry.enemyId];
       const pathDef = this.data.level.paths[entry.pathId];
       if (!def || !pathDef) continue;
@@ -301,7 +435,7 @@ export class Sim {
     for (const tower of this.towers.values()) {
       const def = this.data.towers[tower.defId];
       if (!def || def.family !== 'meleeBarracks') continue;
-      const tier = def.tiers[tower.tier] as BarracksTier;
+      const tier = this.tierOf(tower) as BarracksTier;
       tower.slots.forEach((slot, i) => {
         if (slot.soldierId !== 0) return;
         if (slot.respawn > 0) {
@@ -340,7 +474,7 @@ export class Sim {
     const slot = tower?.slots[s.slot];
     if (slot && def && def.family === 'meleeBarracks') {
       slot.soldierId = 0;
-      slot.respawn = this.ticks((def.tiers[tower.tier] as BarracksTier).respawn);
+      slot.respawn = this.ticks((this.tierOf(tower) as BarracksTier).respawn);
     }
     this.emit({ type: 'soldierKilled', tick: this.tick, id: s.id });
   }
@@ -460,8 +594,7 @@ export class Sim {
         tower.cooldown--;
         continue;
       }
-      const tier = def.tiers[tower.tier];
-      if (!tier) continue;
+      const tier = this.tierOf(tower) as ShooterTier;
 
       // Default targeting: furthest along the path within range. Ties go to the lowest id (iteration order).
       let target: Enemy | undefined;
@@ -580,7 +713,12 @@ export class Sim {
     if (this.lives <= 0) {
       this.status = 'lost';
       this.emit({ type: 'lost', tick: this.tick });
-    } else if (this.spawnIdx >= this.schedule.length && this.enemies.size === 0 && this.status === 'wave') {
+    } else if (
+      this.waveIndex >= this.waveCount &&
+      this.pendingSpawns.length === 0 &&
+      this.enemies.size === 0 &&
+      this.status === 'wave'
+    ) {
       this.status = 'won';
       this.emit({ type: 'won', tick: this.tick });
     }

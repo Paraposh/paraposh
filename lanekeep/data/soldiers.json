@@ -14,5 +14,69 @@
     "regenPerSec": 2,
     "engageRadius": 70,
     "reach": 16
+  },
+  "veteran": {
+    "name": "Veteran",
+    "hp": 130,
+    "armor": 0.25,
+    "magicResist": 0.0,
+    "speed": 60,
+    "damage": [
+      5,
+      8
+    ],
+    "damageType": "physical",
+    "cooldown": 1.0,
+    "regenPerSec": 3,
+    "engageRadius": 70,
+    "reach": 16
+  },
+  "captain": {
+    "name": "Captain",
+    "hp": 180,
+    "armor": 0.3,
+    "magicResist": 0.0,
+    "speed": 62,
+    "damage": [
+      7,
+      11
+    ],
+    "damageType": "physical",
+    "cooldown": 0.95,
+    "regenPerSec": 4,
+    "engageRadius": 70,
+    "reach": 16
+  },
+  "shieldbearer": {
+    "name": "Shieldbearer",
+    "hp": 280,
+    "armor": 0.5,
+    "magicResist": 0.0,
+    "speed": 52,
+    "damage": [
+      5,
+      8
+    ],
+    "damageType": "physical",
+    "cooldown": 1.1,
+    "regenPerSec": 5,
+    "engageRadius": 70,
+    "reach": 16
+  },
+  "raider": {
+    "name": "Raider",
+    "hp": 120,
+    "armor": 0.1,
+    "magicResist": 0.0,
+    "speed": 85,
+    "damage": [
+      8,
+      12
+    ],
+    "damageType": "physical",
+    "cooldown": 0.8,
+    "regenPerSec": 3,
+    "engageRadius": 80,
+    "reach": 16
   }
 }

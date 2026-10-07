@@ -23,7 +23,7 @@ describe('barracks placement and rally', () => {
     run(sim, 6);
     const b = barracks(sim);
     expect(sim.soldiers.size).toBe(3);
-    expect(sim.gold).toBe(300 - 70);
+    expect(sim.gold).toBe(sim.data.level.startGold - 70);
     for (const s of sim.soldiers.values()) {
       expect(s.state).toBe('idle');
       expect(Math.hypot(s.x - b.rallyX, s.y - b.rallyY)).toBeLessThanOrEqual(sim.data.config.soldierFormationRadius + 1);
@@ -79,7 +79,7 @@ describe('blocking and melee', () => {
     expect(blockedDist).toBeGreaterThan(0);
     expect(events.some((e) => e.type === 'meleeHit' && !e.onSoldier)).toBe(true);
     expect(events.some((e) => e.type === 'enemyKilled' && e.id === 900)).toBe(true);
-    expect(sim.gold).toBe(gold0 + 6);
+    expect(sim.gold).toBe(gold0 + sim.data.enemies['goblin_runner']!.bounty);
     // while blocked it never advanced further than the contact point
     expect(goblin.dist).toBeLessThan(blockedDist + 2);
   });

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GameData } from '../../src/data/types';
 import { Sim } from '../../src/sim/sim';
-import { cloneData, injectEnemy, loadData, runUntil, shooterTier } from '../helpers';
+import { cloneData, firstWaveOnly, injectEnemy, loadData, runUntil, shooterTier } from '../helpers';
 
 const totalLivesCost = (d: GameData): number =>
   (d.waves.waves[0] as { groups: { enemyId: string; count: number }[] }).groups.reduce(
@@ -13,15 +13,15 @@ const place = (sim: Sim, spotId = 's1') => sim.queue({ type: 'placeTower', spotI
 
 describe('milestone (a): one path, one enemy, one tower', () => {
   it('without towers every enemy leaks and the level is lost or won with lives spent', () => {
-    const sim = new Sim(loadData(), 1);
+    const sim = new Sim(firstWaveOnly(loadData()), 1);
     runUntil(sim, 60 * 120);
-    expect(sim.lives).toBe(20 - totalLivesCost(loadData()));
+    expect(sim.lives).toBe(20 - totalLivesCost(firstWaveOnly(loadData())));
     expect(sim.enemies.size).toBe(0);
     expect(sim.status).toBe('won'); // wave cleared, lives still > 0
   });
 
   it('losing all lives ends in lost', () => {
-    const d = cloneData(loadData());
+    const d = firstWaveOnly(loadData());
     d.config.startingLives = 3;
     const sim = new Sim(d, 1);
     runUntil(sim, 60 * 120);
@@ -30,13 +30,13 @@ describe('milestone (a): one path, one enemy, one tower', () => {
   });
 
   it('placing a tower spends gold; invalid placements are rejected', () => {
-    const sim = new Sim(loadData(), 1);
+    const sim = new Sim(firstWaveOnly(loadData()), 1);
     place(sim);
     place(sim); // occupied
     sim.queue({ type: 'placeTower', spotId: 'zzz', towerId: 'archer' });
     sim.step();
     expect(sim.towers.size).toBe(1);
-    expect(sim.gold).toBe(300 - 70);
+    expect(sim.gold).toBe(sim.data.level.startGold - 70);
     const rejected = sim.drainEvents().filter((e) => e.type === 'commandRejected');
     expect(rejected).toHaveLength(2);
   });
@@ -51,14 +51,14 @@ describe('milestone (a): one path, one enemy, one tower', () => {
   });
 
   it('towers kill enemies, pay bounty and reduce leaks', () => {
-    const sim = new Sim(loadData(), 1);
+    const sim = new Sim(firstWaveOnly(loadData()), 1);
     place(sim, 's1');
     place(sim, 's3');
     runUntil(sim, 60 * 120);
     const kills = sim.commandLog.length; // 2 placements logged
     expect(kills).toBe(2);
-    expect(sim.lives).toBeGreaterThan(20 - totalLivesCost(loadData()));
-    expect(sim.gold).toBeGreaterThan(300 - 140);
+    expect(sim.lives).toBeGreaterThan(20 - totalLivesCost(firstWaveOnly(loadData())));
+    expect(sim.gold).toBeGreaterThan(sim.data.level.startGold - 140);
   });
 
   it('tower fires only at enemies in range and prefers the one furthest along', () => {
@@ -85,7 +85,7 @@ describe('milestone (a): one path, one enemy, one tower', () => {
       (d.enemies['goblin_runner'] as { flying: boolean }).flying = true;
       const sim = new Sim(d, 1);
       place(sim, 's1');
-      runUntil(sim, 60 * 20);
+      runUntil(sim, 60 * 40);
       return sim.drainEvents().some((e) => e.type === 'projectileFired');
     };
     expect(run(false)).toBe(false);
@@ -100,7 +100,7 @@ describe('milestone (a): one path, one enemy, one tower', () => {
       d.enemies['goblin_runner']!.hp = 10000;
       const sim = new Sim(d, 5);
       place(sim, 's1');
-      runUntil(sim, 60 * 20);
+      runUntil(sim, 60 * 40);
       const ev = sim.drainEvents().find((e) => e.type === 'projectileHit');
       return ev && ev.type === 'projectileHit' ? ev.damage : -1;
     };
@@ -110,7 +110,7 @@ describe('milestone (a): one path, one enemy, one tower', () => {
 
   it('lane offsets spread enemies across the road', () => {
     const sim = new Sim(loadData(), 3);
-    runUntil(sim, 60 * 5 + 60 * 12);
+    runUntil(sim, 60 * 25);
     const offsets = new Set([...sim.enemies.values()].map((e) => Math.round(e.laneOffset)));
     expect(offsets.size).toBeGreaterThan(1);
   });
