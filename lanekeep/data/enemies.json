@@ -60,5 +60,123 @@
     "flying": true,
     "radius": 8,
     "traits": []
+  },
+  "goblin_shaman": {
+    "name": "Goblin Shaman",
+    "hp": 110,
+    "speed": 38,
+    "armor": 0.05,
+    "magicResist": 0.35,
+    "bounty": 20,
+    "livesCost": 1,
+    "flying": false,
+    "radius": 10,
+    "traits": [
+      {
+        "type": "healsAllies",
+        "radius": 90,
+        "hpPerSec": 14
+      }
+    ],
+    "melee": {
+      "damage": 4,
+      "damageType": "magic",
+      "cooldown": 1.2
+    }
+  },
+  "goblin_archer": {
+    "name": "Goblin Archer",
+    "hp": 70,
+    "speed": 45,
+    "armor": 0.0,
+    "magicResist": 0.0,
+    "bounty": 14,
+    "livesCost": 1,
+    "flying": false,
+    "radius": 9,
+    "traits": [
+      {
+        "type": "ranged",
+        "range": 110,
+        "damage": 5,
+        "damageType": "physical",
+        "cooldown": 1.4
+      }
+    ],
+    "melee": {
+      "damage": 3,
+      "damageType": "physical",
+      "cooldown": 1.2
+    }
+  },
+  "ogre": {
+    "name": "Ogre",
+    "hp": 300,
+    "speed": 30,
+    "armor": 0.25,
+    "magicResist": 0.1,
+    "bounty": 40,
+    "livesCost": 3,
+    "flying": false,
+    "radius": 15,
+    "traits": [
+      {
+        "type": "enrage",
+        "hpThreshold": 0.4,
+        "speedMult": 1.8,
+        "damageMult": 1.6
+      }
+    ],
+    "melee": {
+      "damage": 18,
+      "damageType": "physical",
+      "cooldown": 1.5
+    }
+  },
+  "brood_mother": {
+    "name": "Brood Mother",
+    "hp": 300,
+    "speed": 28,
+    "armor": 0.15,
+    "magicResist": 0.15,
+    "bounty": 45,
+    "livesCost": 3,
+    "flying": false,
+    "radius": 14,
+    "traits": [
+      {
+        "type": "summons",
+        "enemyId": "goblin_runner",
+        "count": 2,
+        "interval": 12
+      },
+      {
+        "type": "splitsOnDeath",
+        "enemyId": "goblin_runner",
+        "count": 3
+      }
+    ],
+    "melee": {
+      "damage": 10,
+      "damageType": "physical",
+      "cooldown": 1.4
+    }
+  },
+  "warlord": {
+    "name": "Warlord",
+    "hp": 1100,
+    "speed": 26,
+    "armor": 0.35,
+    "magicResist": 0.2,
+    "bounty": 150,
+    "livesCost": 6,
+    "flying": false,
+    "radius": 18,
+    "traits": [],
+    "melee": {
+      "damage": 26,
+      "damageType": "physical",
+      "cooldown": 1.6
+    }
   }
 }

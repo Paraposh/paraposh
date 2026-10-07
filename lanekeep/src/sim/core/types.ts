@@ -33,6 +33,19 @@ export interface Enemy {
   blockers: number[];
   /** Ticks until the enemy's next melee swing. */
   attackCooldown: number;
+  /** Ticks until the next ranged shot (ranged trait). */
+  rangedCooldown: number;
+  /** Countdown per trait index (summon timers); unused slots are 0. */
+  traitTimers: number[];
+  /** Runtime multipliers set by enrage. */
+  speedMult: number;
+  damageMult: number;
+  enraged: boolean;
+  /** Summoned or split-off enemies pay no bounty. */
+  spawned: boolean;
+  /** Set for bosses; phase is -1 until the first phase is entered. */
+  bossId: string;
+  phase: number;
 }
 
 export interface Tower {
@@ -105,6 +118,8 @@ export type SimEvent =
   | { type: 'soldierSpawned'; tick: number; id: number }
   | { type: 'soldierKilled'; tick: number; id: number }
   | { type: 'meleeHit'; tick: number; attackerId: number; targetId: number; damage: number; onSoldier: boolean }
+  | { type: 'enemyEnraged'; tick: number; id: number }
+  | { type: 'bossPhase'; tick: number; id: number; phase: number }
   | { type: 'splashImpact'; tick: number; x: number; y: number; radius: number }
   | { type: 'commandRejected'; tick: number; reason: string }
   | { type: 'won'; tick: number }

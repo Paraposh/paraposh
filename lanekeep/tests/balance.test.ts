@@ -20,7 +20,7 @@ describe('level 1 balance', () => {
   });
 
   it('a sensible mixed build wins on several seeds with at least one star', () => {
-    for (const seed of [1, 2, 3]) {
+    for (const seed of [1, 2, 3, 4, 5]) {
       const sim = playBot(loadData(), seed, MIXED);
       expect(sim.status, `seed ${seed}`).toBe('won');
       expect(sim.stars, `seed ${seed}`).toBeGreaterThanOrEqual(1);

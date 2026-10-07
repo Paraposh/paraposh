@@ -1,4 +1,4 @@
-import type { BarracksTier, DamageType, GameData, ShooterTier, ShredDef, SoldierDef } from '../data/types';
+import type { BarracksTier, BossPhase, DamageType, EnemyDef, GameData, PhaseAction, ShooterTier, ShredDef, SoldierDef } from '../data/types';
 import { Rng } from './core/rng';
 import type { Command, Enemy, Projectile, SimEvent, SimStatus, Soldier, Tower } from './core/types';
 import { damageAfterResist } from './math/damage';
@@ -7,6 +7,7 @@ import { splashFactor } from './math/splash';
 import { SplinePath } from './math/spline';
 
 interface SpawnEntry {
+  bossId?: string;
   /** Absolute tick once started; offset from wave start inside `waveEntries`. */
   tick: number;
   enemyId: string;
@@ -100,6 +101,7 @@ export class Sim {
     this.waveSystem();
     this.spawnSystem();
     this.statusSystem();
+    this.traitSystem();
     this.barracksSystem();
     this.soldierSystem();
     this.movementSystem();
@@ -130,6 +132,8 @@ export class Sim {
       mix(e.shredStacks);
       mix(e.shredTicks);
       mix(e.blockers.length);
+      mix(e.phase);
+      mix(e.speedMult);
     }
     for (const t of this.towers.values()) (mix(t.id), mix(t.cooldown), mix(t.tier), mix(t.specId.length), mix(t.rallyX), mix(t.rallyY));
     for (const s of this.soldiers.values()) (mix(s.id), mix(s.x), mix(s.y), mix(s.hp), mix(s.targetId));
@@ -156,7 +160,8 @@ export class Sim {
         for (let k = 0; k < g.count; k++) {
           out.push({
             tick: this.ticks(g.startDelay) + this.ticks(g.interval * k),
-            enemyId: g.enemyId,
+            enemyId: g.bossId ? (this.data.waves.bosses?.[g.bossId]?.enemyId ?? '') : (g.enemyId ?? ''),
+            bossId: g.bossId,
             pathId: g.path,
             order: order++,
           });
@@ -345,36 +350,116 @@ export class Sim {
   private spawnSystem(): void {
     while (this.pendingSpawns.length > 0 && (this.pendingSpawns[0] as SpawnEntry).tick <= this.tick) {
       const entry = this.pendingSpawns.shift() as SpawnEntry;
-      const def = this.data.enemies[entry.enemyId];
-      const pathDef = this.data.level.paths[entry.pathId];
-      if (!def || !pathDef) continue;
-      const lane = this.rng.int(pathDef.lanes);
-      const jitter = (this.rng.next() * 2 - 1) * this.data.config.laneOffsetJitter * pathDef.laneSpacing;
-      const laneOffset = (lane - (pathDef.lanes - 1) / 2) * pathDef.laneSpacing + jitter;
-      const enemy: Enemy = {
-        id: this.nextId++,
-        defId: entry.enemyId,
-        pathId: entry.pathId,
-        laneOffset,
-        dist: 0,
-        hp: def.hp,
-        maxHp: def.hp,
-        x: 0,
-        y: 0,
-        prevX: 0,
-        prevY: 0,
-        shredArmor: 0,
-        shredMagic: 0,
-        shredStacks: 0,
-        shredTicks: 0,
-        blockers: [],
-        attackCooldown: 0,
-      };
-      [enemy.x, enemy.y] = this.positionAt(enemy, 0);
-      enemy.prevX = enemy.x;
-      enemy.prevY = enemy.y;
-      this.enemies.set(enemy.id, enemy);
-      this.emit({ type: 'enemySpawned', tick: this.tick, id: enemy.id });
+      this.spawnEnemy(entry.enemyId, entry.pathId, 0, { bossId: entry.bossId });
+    }
+  }
+
+  /** Creates an enemy on a path at arc distance `dist`. Lane and jitter come from the sim RNG. */
+  private spawnEnemy(defId: string, pathId: string, dist: number, opts: { bossId?: string; spawned?: boolean } = {}): Enemy | undefined {
+    const def = this.data.enemies[defId];
+    const pathDef = this.data.level.paths[pathId];
+    if (!def || !pathDef) return undefined;
+    const lane = this.rng.int(pathDef.lanes);
+    const jitter = (this.rng.next() * 2 - 1) * this.data.config.laneOffsetJitter * pathDef.laneSpacing;
+    const laneOffset = (lane - (pathDef.lanes - 1) / 2) * pathDef.laneSpacing + jitter;
+    const enemy: Enemy = {
+      id: this.nextId++,
+      defId,
+      pathId,
+      laneOffset,
+      dist,
+      hp: def.hp,
+      maxHp: def.hp,
+      x: 0,
+      y: 0,
+      prevX: 0,
+      prevY: 0,
+      shredArmor: 0,
+      shredMagic: 0,
+      shredStacks: 0,
+      shredTicks: 0,
+      blockers: [],
+      attackCooldown: 0,
+      rangedCooldown: 0,
+      traitTimers: def.traits.map((t) => (t.type === 'summons' ? this.ticks(t.interval) : 0)),
+      speedMult: 1,
+      damageMult: 1,
+      enraged: false,
+      spawned: opts.spawned ?? false,
+      bossId: opts.bossId ?? '',
+      phase: -1,
+    };
+    [enemy.x, enemy.y] = this.positionAt(enemy, dist);
+    enemy.prevX = enemy.x;
+    enemy.prevY = enemy.y;
+    this.enemies.set(enemy.id, enemy);
+    this.emit({ type: 'enemySpawned', tick: this.tick, id: enemy.id });
+    return enemy;
+  }
+
+  private phaseOf(e: Enemy): BossPhase | undefined {
+    return e.bossId && e.phase >= 0 ? this.data.waves.bosses?.[e.bossId]?.phases[e.phase] : undefined;
+  }
+
+  private applyAction(e: Enemy, a: PhaseAction): void {
+    if (a.type === 'summon') {
+      for (let i = 0; i < a.count; i++) this.spawnEnemy(a.enemyId, e.pathId, Math.max(0, e.dist - 20 - i * 6), { spawned: true });
+    } else if (!e.enraged) {
+      this.enrage(e, a.speedMult, a.damageMult);
+    }
+  }
+
+  private enrage(e: Enemy, speedMult: number, damageMult: number): void {
+    e.enraged = true;
+    e.speedMult *= speedMult;
+    e.damageMult *= damageMult;
+    this.emit({ type: 'enemyEnraged', tick: this.tick, id: e.id });
+  }
+
+  /** Enemy speed in world units per second after enrage and boss phase modifiers. */
+  private speedOf(e: Enemy, def: EnemyDef): number {
+    return def.speed * e.speedMult * (this.phaseOf(e)?.speedMult ?? 1);
+  }
+
+  /** Composable traits (heal aura, summons, enrage) and boss phase scripts. */
+  private traitSystem(): void {
+    const rate = this.data.config.tickRate;
+    for (const e of [...this.enemies.values()]) {
+      const def = this.data.enemies[e.defId];
+      if (!def) continue;
+
+      def.traits.forEach((t, i) => {
+        if (t.type === 'healsAllies') {
+          const r2 = t.radius * t.radius;
+          for (const ally of this.enemies.values()) {
+            if (ally === e || ally.hp >= ally.maxHp) continue;
+            const dx = ally.x - e.x;
+            const dy = ally.y - e.y;
+            if (dx * dx + dy * dy <= r2) ally.hp = Math.min(ally.maxHp, ally.hp + t.hpPerSec / rate);
+          }
+        } else if (t.type === 'summons') {
+          const left = (e.traitTimers[i] ?? 0) - 1;
+          e.traitTimers[i] = left;
+          if (left <= 0) {
+            e.traitTimers[i] = this.ticks(t.interval);
+            for (let k = 0; k < t.count; k++) this.spawnEnemy(t.enemyId, e.pathId, Math.max(0, e.dist - 20 - k * 6), { spawned: true });
+          }
+        } else if (t.type === 'enrage') {
+          if (!e.enraged && e.hp / e.maxHp <= t.hpThreshold) this.enrage(e, t.speedMult, t.damageMult);
+        }
+      });
+
+      const boss = e.bossId ? this.data.waves.bosses?.[e.bossId] : undefined;
+      if (boss) {
+        const frac = e.hp / e.maxHp;
+        let target = boss.phases.findIndex((p) => frac > p.hpAbove);
+        if (target < 0) target = boss.phases.length - 1;
+        while (e.phase < target) {
+          e.phase++;
+          for (const a of boss.phases[e.phase]?.onEnter ?? []) this.applyAction(e, a);
+          this.emit({ type: 'bossPhase', tick: this.tick, id: e.id, phase: e.phase });
+        }
+      }
     }
   }
 
@@ -397,7 +482,7 @@ export class Sim {
       e.prevX = e.x;
       e.prevY = e.y;
       if (e.blockers.length > 0) continue; // held in melee by a soldier
-      e.dist += def.speed / rate;
+      e.dist += this.speedOf(e, def) / rate;
       if (e.dist >= path.length) {
         this.enemies.delete(e.id);
         this.lives = Math.max(0, this.lives - def.livesCost);
@@ -408,25 +493,46 @@ export class Sim {
     }
   }
 
-  /** Blocked enemies swing at their primary blocker (the first soldier that made contact). */
+  /** Blocked enemies swing at their primary blocker (the first soldier that made contact). Ranged enemies shoot the nearest soldier in range. */
   private enemyCombatSystem(): void {
     for (const e of this.enemies.values()) {
-      if (e.blockers.length === 0) continue;
       const def = this.data.enemies[e.defId];
-      if (!def?.melee) continue;
+      if (!def) continue;
+      const ranged = def.traits.find((t) => t.type === 'ranged');
+      if (ranged && ranged.type === 'ranged') {
+        if (e.rangedCooldown > 0) e.rangedCooldown--;
+        else {
+          let near: Soldier | undefined;
+          let best = ranged.range;
+          for (const s of this.soldiers.values()) {
+            const d = Math.hypot(s.x - e.x, s.y - e.y);
+            if (d <= best) (best = d), (near = s);
+          }
+          if (near) {
+            e.rangedCooldown = Math.max(1, this.ticks(ranged.cooldown));
+            this.hurtSoldier(e, near, ranged.damage * e.damageMult, ranged.damageType);
+          }
+        }
+      }
+      if (e.blockers.length === 0 || !def.melee) continue;
       if (e.attackCooldown > 0) {
         e.attackCooldown--;
         continue;
       }
       const soldier = this.soldiers.get(e.blockers[0] as number);
-      const sDef = soldier && this.data.soldiers[soldier.defId];
-      if (!soldier || !sDef) continue;
-      const dealt = damageAfterResist(def.melee.damage, def.melee.damageType, sDef.armor, sDef.magicResist, this.data.config);
-      soldier.hp -= dealt;
+      if (!soldier) continue;
       e.attackCooldown = Math.max(1, this.ticks(def.melee.cooldown));
-      this.emit({ type: 'meleeHit', tick: this.tick, attackerId: e.id, targetId: soldier.id, damage: dealt, onSoldier: true });
-      if (soldier.hp <= 0) this.killSoldier(soldier);
+      this.hurtSoldier(e, soldier, def.melee.damage * e.damageMult, def.melee.damageType);
     }
+  }
+
+  private hurtSoldier(e: Enemy, soldier: Soldier, raw: number, type: DamageType): void {
+    const sDef = this.data.soldiers[soldier.defId];
+    if (!sDef) return;
+    const dealt = damageAfterResist(raw, type, sDef.armor, sDef.magicResist, this.data.config);
+    soldier.hp -= dealt;
+    this.emit({ type: 'meleeHit', tick: this.tick, attackerId: e.id, targetId: soldier.id, damage: dealt, onSoldier: true });
+    if (soldier.hp <= 0) this.killSoldier(soldier);
   }
 
   // ----------------------------------------------------------------- barracks
@@ -690,13 +796,18 @@ export class Sim {
     const def = this.data.enemies[e.defId];
     if (!def) return 0;
     const dealt = damageAfterResist(raw, type, def.armor, def.magicResist, this.data.config, {
-      armorReduction: e.shredArmor + armorPen,
-      magicReduction: e.shredMagic + magicPen,
+      armorReduction: e.shredArmor + armorPen - (this.phaseOf(e)?.armorDelta ?? 0),
+      magicReduction: e.shredMagic + magicPen - (this.phaseOf(e)?.magicResistDelta ?? 0),
     });
     e.hp -= dealt;
     if (e.hp <= 0 && this.enemies.delete(e.id)) {
-      this.gold += def.bounty;
-      this.emit({ type: 'enemyKilled', tick: this.tick, id: e.id, gold: def.bounty });
+      const gold = e.spawned ? 0 : def.bounty;
+      this.gold += gold;
+      this.emit({ type: 'enemyKilled', tick: this.tick, id: e.id, gold });
+      for (const t of def.traits) {
+        if (t.type !== 'splitsOnDeath') continue;
+        for (let k = 0; k < t.count; k++) this.spawnEnemy(t.enemyId, e.pathId, Math.max(0, e.dist - k * 8), { spawned: true });
+      }
     }
     return dealt;
   }

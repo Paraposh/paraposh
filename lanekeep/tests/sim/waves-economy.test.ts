@@ -34,7 +34,7 @@ describe('wave sequencing', () => {
       sim.step();
       for (const e of sim.drainEvents()) if (e.type === 'waveStarted') started.push(e.index);
     }
-    expect(started).toEqual([0, 1, 2, 3, 4]);
+    expect(started).toEqual(sim.data.waves.waves.map((_, i) => i));
     expect(sim.status).toBe('won');
     expect(sim.stars).toBe(3);
   });

@@ -55,9 +55,151 @@
       "traits": {
         "type": "array",
         "items": {
-          "type": "object",
-          "required": [
-            "type"
+          "oneOf": [
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "radius",
+                "hpPerSec"
+              ],
+              "properties": {
+                "type": {
+                  "const": "healsAllies"
+                },
+                "radius": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "hpPerSec": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "enemyId",
+                "count",
+                "interval"
+              ],
+              "properties": {
+                "type": {
+                  "const": "summons"
+                },
+                "enemyId": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "interval": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "enemyId",
+                "count"
+              ],
+              "properties": {
+                "type": {
+                  "const": "splitsOnDeath"
+                },
+                "enemyId": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 1
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "range",
+                "damage",
+                "damageType",
+                "cooldown"
+              ],
+              "properties": {
+                "type": {
+                  "const": "ranged"
+                },
+                "range": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "damage": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "damageType": {
+                  "enum": [
+                    "physical",
+                    "magic",
+                    "true"
+                  ]
+                },
+                "cooldown": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type",
+                "hpThreshold",
+                "speedMult",
+                "damageMult"
+              ],
+              "properties": {
+                "type": {
+                  "const": "enrage"
+                },
+                "hpThreshold": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "speedMult": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "damageMult": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                }
+              }
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "type"
+              ],
+              "properties": {
+                "type": {
+                  "const": "bypassBlockers"
+                }
+              }
+            }
           ]
         }
       },

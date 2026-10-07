@@ -19,6 +19,33 @@ export interface Config {
   speeds: number[];
 }
 
+export type Trait =
+  | { type: 'healsAllies'; radius: number; hpPerSec: number }
+  | { type: 'summons'; enemyId: string; count: number; interval: number }
+  | { type: 'splitsOnDeath'; enemyId: string; count: number }
+  | { type: 'ranged'; range: number; damage: number; damageType: DamageType; cooldown: number }
+  | { type: 'enrage'; hpThreshold: number; speedMult: number; damageMult: number }
+  | { type: 'bypassBlockers' };
+
+export type PhaseAction =
+  | { type: 'summon'; enemyId: string; count: number }
+  | { type: 'enrage'; speedMult: number; damageMult: number };
+
+export interface BossPhase {
+  /** The phase is active while the boss's HP fraction is above this. Phases only move forward. */
+  hpAbove: number;
+  onEnter?: PhaseAction[];
+  speedMult?: number;
+  /** Added to the boss's armor / magic resist while in this phase. */
+  armorDelta?: number;
+  magicResistDelta?: number;
+}
+
+export interface BossDef {
+  enemyId: string;
+  phases: BossPhase[];
+}
+
 export interface EnemyDef {
   name: string;
   hp: number;
@@ -29,7 +56,7 @@ export interface EnemyDef {
   livesCost: number;
   flying: boolean;
   radius: number;
-  traits: { type: string }[];
+  traits: Trait[];
   /** Melee attack used against blockers. Enemies without it stop but do not hit back. */
   melee?: { damage: number; damageType: DamageType; cooldown: number };
 }
@@ -142,7 +169,9 @@ export interface LevelDef {
 }
 
 export interface WaveGroup {
-  enemyId: string;
+  /** Exactly one of enemyId or bossId. */
+  enemyId?: string;
+  bossId?: string;
   count: number;
   interval: number;
   startDelay: number;
@@ -157,6 +186,7 @@ export interface WaveDef {
 
 export interface WavesFile {
   waves: WaveDef[];
+  bosses?: Record<string, BossDef>;
 }
 
 export interface GameData {
