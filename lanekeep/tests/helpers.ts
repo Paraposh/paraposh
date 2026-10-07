@@ -15,9 +15,17 @@ export function loadData(): GameData {
     enemies: read('enemies.json'),
     towers: read('towers.json'),
     soldiers: read('soldiers.json'),
+    spells: read('spells.json'),
+    heroes: read('heroes.json'),
     level,
     waves: read(level.waves),
   });
+}
+
+/** Parks the hero far from every road so tests of other systems are not affected by it. */
+export function parkHero(d: GameData): GameData {
+  d.level.heroSpawn = [1270, 710];
+  return d;
 }
 
 /** Deep clone so tests can tweak data without touching other tests. */
@@ -53,7 +61,7 @@ export function injectEnemy(sim: Sim, defId: string, dist: number, id: number, p
 
 /** A sim whose scheduled wave is pushed far into the future, so tests control enemies via injectEnemy. */
 export function quietSim(mut?: (d: GameData) => void, seed = 1): Sim {
-  const d = cloneData(loadData());
+  const d = parkHero(cloneData(loadData()));
   d.waves.waves = [d.waves.waves[0]!];
   d.waves.waves[0]!.groups = [{ enemyId: 'goblin_runner', count: 1, interval: 0, startDelay: 9999, path: 'main' }];
   mut?.(d);
@@ -62,7 +70,7 @@ export function quietSim(mut?: (d: GameData) => void, seed = 1): Sim {
 
 /** Shipped data cut down to the first wave (for tests that predate multi-wave levels). */
 export function firstWaveOnly(d: GameData): GameData {
-  const c = cloneData(d);
+  const c = parkHero(cloneData(d));
   c.waves.waves = [c.waves.waves[0]!];
   return c;
 }

@@ -142,6 +142,58 @@ export interface SoldierDef {
   reach: number;
 }
 
+export interface AreaDamageSpell {
+  kind: 'areaDamage';
+  name: string;
+  cooldown: number;
+  radius: number;
+  damage: number;
+  damageType: DamageType;
+  /** Seconds between casting and the blast landing. */
+  delay: number;
+  hitsAir: boolean;
+}
+
+export interface SummonSpell {
+  kind: 'summonSoldiers';
+  name: string;
+  cooldown: number;
+  soldierId: string;
+  count: number;
+  /** Seconds the summoned soldiers last. */
+  lifetime: number;
+}
+
+export type SpellDef = AreaDamageSpell | SummonSpell;
+
+export interface HeroLevel {
+  /** Total XP at which this level is reached. */
+  xpTotal: number;
+  hpMult: number;
+  damageMult: number;
+}
+
+export interface HeroDef {
+  name: string;
+  stats: {
+    hp: number;
+    armor: number;
+    magicResist: number;
+    speed: number;
+    damage: [number, number];
+    damageType: DamageType;
+    cooldown: number;
+    regenPerSec: number;
+    engageRadius: number;
+    reach: number;
+  };
+  /** Entry i describes level i + 2. Level 1 uses the base stats. */
+  levels: HeroLevel[];
+  ability: { spellId: string };
+  reviveTime: number;
+  reviveTimePerLevel: number;
+}
+
 export interface PathDef {
   points: Vec2[];
   spline: 'catmullRom' | 'linear';
@@ -164,7 +216,10 @@ export interface LevelDef {
   paths: Record<string, PathDef>;
   buildSpots: BuildSpotDef[];
   availableTowers: string[];
-  heroSpawn?: Vec2;
+  heroId: string;
+  heroSpawn: Vec2;
+  /** Player cooldown spells available on this level. */
+  spells: string[];
   waves: string;
 }
 
@@ -194,6 +249,8 @@ export interface GameData {
   enemies: Record<string, EnemyDef>;
   towers: Record<string, TowerDef>;
   soldiers: Record<string, SoldierDef>;
+  spells: Record<string, SpellDef>;
+  heroes: Record<string, HeroDef>;
   level: LevelDef;
   waves: WavesFile;
 }

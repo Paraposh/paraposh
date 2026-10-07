@@ -1,0 +1,134 @@
+{
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "name",
+      "stats",
+      "levels",
+      "ability",
+      "reviveTime",
+      "reviveTimePerLevel"
+    ],
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "stats": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "hp",
+          "armor",
+          "magicResist",
+          "speed",
+          "damage",
+          "damageType",
+          "cooldown",
+          "regenPerSec",
+          "engageRadius",
+          "reach"
+        ],
+        "properties": {
+          "hp": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "armor": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "magicResist": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 1
+          },
+          "speed": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "damage": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "number",
+              "minimum": 0
+            }
+          },
+          "damageType": {
+            "enum": [
+              "physical",
+              "magic",
+              "true"
+            ]
+          },
+          "cooldown": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "regenPerSec": {
+            "type": "number",
+            "minimum": 0
+          },
+          "engageRadius": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "reach": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        }
+      },
+      "levels": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "xpTotal",
+            "hpMult",
+            "damageMult"
+          ],
+          "properties": {
+            "xpTotal": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "hpMult": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            },
+            "damageMult": {
+              "type": "number",
+              "exclusiveMinimum": 0
+            }
+          }
+        }
+      },
+      "ability": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "spellId"
+        ],
+        "properties": {
+          "spellId": {
+            "type": "string"
+          }
+        }
+      },
+      "reviveTime": {
+        "type": "number",
+        "minimum": 0
+      },
+      "reviveTimePerLevel": {
+        "type": "number",
+        "minimum": 0
+      }
+    }
+  }
+}

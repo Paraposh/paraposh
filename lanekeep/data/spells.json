@@ -1,0 +1,30 @@
+{
+  "meteor": {
+    "kind": "areaDamage",
+    "name": "Meteor Strike",
+    "cooldown": 45,
+    "radius": 110,
+    "damage": 150,
+    "damageType": "magic",
+    "delay": 0.8,
+    "hitsAir": true
+  },
+  "reinforcements": {
+    "kind": "summonSoldiers",
+    "name": "Reinforcements",
+    "cooldown": 35,
+    "soldierId": "militia",
+    "count": 3,
+    "lifetime": 20
+  },
+  "hero_slam": {
+    "kind": "areaDamage",
+    "name": "Ground Slam",
+    "cooldown": 18,
+    "radius": 80,
+    "damage": 70,
+    "damageType": "physical",
+    "delay": 0.3,
+    "hitsAir": false
+  }
+}

@@ -6,7 +6,10 @@ export type Command =
   | { type: 'upgradeTower'; towerId: number }
   | { type: 'specialize'; towerId: number; specId: string }
   | { type: 'sellTower'; towerId: number }
-  | { type: 'callWave' };
+  | { type: 'callWave' }
+  | { type: 'moveHero'; x: number; y: number }
+  | { type: 'castSpell'; spellId: string; x: number; y: number }
+  | { type: 'heroAbility' };
 
 export type SimStatus = 'prepare' | 'wave' | 'won' | 'lost';
 
@@ -82,6 +85,45 @@ export interface Soldier {
   targetId: number;
   state: 'moving' | 'idle' | 'fighting';
   cooldown: number;
+  /** Where this soldier stands guard and from where it acquires targets (tower rally point, or the summon point). */
+  anchorX: number;
+  anchorY: number;
+  /** Ticks of life left for summoned soldiers; -1 for barracks soldiers. */
+  lifetime: number;
+}
+
+export interface Hero {
+  id: number;
+  defId: string;
+  x: number;
+  y: number;
+  prevX: number;
+  prevY: number;
+  hp: number;
+  maxHp: number;
+  level: number;
+  xp: number;
+  state: 'idle' | 'moving' | 'fighting' | 'dead';
+  /** Click-to-move order, or null. */
+  moveX: number | null;
+  moveY: number | null;
+  /** The hero guards the spot where it last stopped. */
+  anchorX: number;
+  anchorY: number;
+  targetId: number;
+  cooldown: number;
+  reviveTicks: number;
+}
+
+/** Delayed world effect (spell blasts). */
+export interface Effect {
+  id: number;
+  spellId: string;
+  x: number;
+  y: number;
+  ticksLeft: number;
+  totalTicks: number;
+  fromHero: boolean;
 }
 
 export interface Projectile {
@@ -118,6 +160,11 @@ export type SimEvent =
   | { type: 'soldierSpawned'; tick: number; id: number }
   | { type: 'soldierKilled'; tick: number; id: number }
   | { type: 'meleeHit'; tick: number; attackerId: number; targetId: number; damage: number; onSoldier: boolean }
+  | { type: 'spellCast'; tick: number; spellId: string }
+  | { type: 'spellImpact'; tick: number; spellId: string; x: number; y: number; radius: number }
+  | { type: 'heroLevelUp'; tick: number; level: number }
+  | { type: 'heroDied'; tick: number }
+  | { type: 'heroRevived'; tick: number }
   | { type: 'enemyEnraged'; tick: number; id: number }
   | { type: 'bossPhase'; tick: number; id: number; phase: number }
   | { type: 'splashImpact'; tick: number; x: number; y: number; radius: number }

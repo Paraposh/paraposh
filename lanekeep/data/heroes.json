@@ -1,0 +1,52 @@
+{
+  "captain_mara": {
+    "name": "Captain Mara",
+    "stats": {
+      "hp": 320,
+      "armor": 0.25,
+      "magicResist": 0.1,
+      "speed": 85,
+      "damage": [
+        9,
+        14
+      ],
+      "damageType": "physical",
+      "cooldown": 0.9,
+      "regenPerSec": 4,
+      "engageRadius": 80,
+      "reach": 18
+    },
+    "levels": [
+      {
+        "xpTotal": 60,
+        "hpMult": 1.12,
+        "damageMult": 1.1
+      },
+      {
+        "xpTotal": 150,
+        "hpMult": 1.25,
+        "damageMult": 1.22
+      },
+      {
+        "xpTotal": 280,
+        "hpMult": 1.4,
+        "damageMult": 1.36
+      },
+      {
+        "xpTotal": 450,
+        "hpMult": 1.58,
+        "damageMult": 1.52
+      },
+      {
+        "xpTotal": 700,
+        "hpMult": 1.8,
+        "damageMult": 1.7
+      }
+    ],
+    "ability": {
+      "spellId": "hero_slam"
+    },
+    "reviveTime": 25,
+    "reviveTimePerLevel": 4
+  }
+}

@@ -78,5 +78,21 @@
     "regenPerSec": 3,
     "engageRadius": 80,
     "reach": 16
+  },
+  "militia": {
+    "name": "Militia",
+    "hp": 70,
+    "armor": 0.1,
+    "magicResist": 0.0,
+    "speed": 65,
+    "damage": [
+      3,
+      6
+    ],
+    "damageType": "physical",
+    "cooldown": 1.0,
+    "regenPerSec": 0,
+    "engageRadius": 90,
+    "reach": 16
   }
 }

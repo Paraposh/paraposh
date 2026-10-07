@@ -1,0 +1,90 @@
+{
+  "type": "object",
+  "additionalProperties": {
+    "oneOf": [
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "name",
+          "cooldown",
+          "radius",
+          "damage",
+          "damageType",
+          "delay",
+          "hitsAir"
+        ],
+        "properties": {
+          "kind": {
+            "const": "areaDamage"
+          },
+          "name": {
+            "type": "string"
+          },
+          "cooldown": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "radius": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "damage": {
+            "type": "number",
+            "minimum": 0
+          },
+          "damageType": {
+            "enum": [
+              "physical",
+              "magic",
+              "true"
+            ]
+          },
+          "delay": {
+            "type": "number",
+            "minimum": 0
+          },
+          "hitsAir": {
+            "type": "boolean"
+          }
+        }
+      },
+      {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "name",
+          "cooldown",
+          "soldierId",
+          "count",
+          "lifetime"
+        ],
+        "properties": {
+          "kind": {
+            "const": "summonSoldiers"
+          },
+          "name": {
+            "type": "string"
+          },
+          "cooldown": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          },
+          "soldierId": {
+            "type": "string"
+          },
+          "count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "lifetime": {
+            "type": "number",
+            "exclusiveMinimum": 0
+          }
+        }
+      }
+    ]
+  }
+}

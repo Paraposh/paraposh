@@ -4,6 +4,8 @@ import configSchema from '../../data/schemas/config.schema.json';
 import enemiesSchema from '../../data/schemas/enemies.schema.json';
 import towersSchema from '../../data/schemas/towers.schema.json';
 import soldiersSchema from '../../data/schemas/soldiers.schema.json';
+import spellsSchema from '../../data/schemas/spells.schema.json';
+import heroesSchema from '../../data/schemas/heroes.schema.json';
 import levelSchema from '../../data/schemas/level.schema.json';
 import wavesSchema from '../../data/schemas/waves.schema.json';
 
@@ -12,6 +14,8 @@ export interface RawGameData {
   enemies: unknown;
   towers: unknown;
   soldiers: unknown;
+  spells: unknown;
+  heroes: unknown;
   level: unknown;
   waves: unknown;
 }
@@ -22,6 +26,8 @@ const checks = {
   enemies: ajv.compile(enemiesSchema),
   towers: ajv.compile(towersSchema),
   soldiers: ajv.compile(soldiersSchema),
+  spells: ajv.compile(spellsSchema),
+  heroes: ajv.compile(heroesSchema),
   level: ajv.compile(levelSchema),
   waves: ajv.compile(wavesSchema),
 };
@@ -38,7 +44,7 @@ export function validateGameData(raw: RawGameData): GameData {
   if (errors.length > 0) throw new Error(`Invalid game data:\n${errors.join('\n')}`);
 
   const data = raw as GameData;
-  const { level, waves, enemies, towers, soldiers, config } = data;
+  const { level, waves, enemies, towers, soldiers, spells, heroes, config } = data;
   if (config.resistMin > config.resistMax) errors.push('config: resistMin > resistMax');
   for (const [towerId, tower] of Object.entries(towers)) {
     if (tower.family !== 'meleeBarracks') continue;
@@ -46,6 +52,19 @@ export function validateGameData(raw: RawGameData): GameData {
       if (!soldiers[tier.soldierId]) errors.push(`towers.${towerId}: unknown soldier "${tier.soldierId}"`);
     }
   }
+  for (const [spellId, spell] of Object.entries(spells)) {
+    if (spell.kind === 'summonSoldiers' && !soldiers[spell.soldierId]) errors.push(`spells.${spellId}: unknown soldier "${spell.soldierId}"`);
+  }
+  for (const [heroId, hero] of Object.entries(heroes)) {
+    if (!spells[hero.ability.spellId]) errors.push(`heroes.${heroId}: unknown spell "${hero.ability.spellId}"`);
+    for (let i = 1; i < hero.levels.length; i++) {
+      if ((hero.levels[i] as { xpTotal: number }).xpTotal <= (hero.levels[i - 1] as { xpTotal: number }).xpTotal) {
+        errors.push(`heroes.${heroId}: levels must have increasing xpTotal`);
+      }
+    }
+  }
+  if (!heroes[level.heroId]) errors.push(`level.heroId: unknown hero "${level.heroId}"`);
+  for (const spellId of level.spells) if (!spells[spellId]) errors.push(`level.spells: unknown spell "${spellId}"`);
   for (const towerId of level.availableTowers) {
     if (!towers[towerId]) errors.push(`level.availableTowers: unknown tower "${towerId}"`);
   }

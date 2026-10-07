@@ -9,7 +9,10 @@
     "paths",
     "buildSpots",
     "availableTowers",
-    "waves"
+    "waves",
+    "heroId",
+    "heroSpawn",
+    "spells"
   ],
   "properties": {
     "id": {
@@ -124,6 +127,15 @@
     },
     "waves": {
       "type": "string"
+    },
+    "heroId": {
+      "type": "string"
+    },
+    "spells": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   }
 }
