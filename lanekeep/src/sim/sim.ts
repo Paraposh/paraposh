@@ -1,9 +1,9 @@
-import type { GameData, ShredDef } from '../data/types';
+import type { GameData, ShredDef, SoldierDef, DamageType, BarracksTier } from '../data/types';
 import { Rng } from './core/rng';
-import type { Command, Enemy, Projectile, SimEvent, SimStatus, Tower } from './core/types';
+import type { Command, Enemy, Projectile, SimEvent, SimStatus, Soldier, Tower } from './core/types';
 import { damageAfterResist } from './math/damage';
-import { splashFactor } from './math/splash';
 import { leadIntercept } from './math/lead';
+import { splashFactor } from './math/splash';
 import { SplinePath } from './math/spline';
 
 interface SpawnEntry {
@@ -21,6 +21,7 @@ export class Sim {
   readonly rng: Rng;
   readonly enemies = new Map<number, Enemy>();
   readonly towers = new Map<number, Tower>();
+  readonly soldiers = new Map<number, Soldier>();
   readonly projectiles = new Map<number, Projectile>();
   readonly commandLog: { tick: number; cmd: Command }[] = [];
   readonly paths: Record<string, SplinePath> = {};
@@ -65,7 +66,10 @@ export class Sim {
     this.applyCommands();
     this.spawnSystem();
     this.statusSystem();
+    this.barracksSystem();
+    this.soldierSystem();
     this.movementSystem();
+    this.enemyCombatSystem();
     this.towerSystem();
     this.projectileSystem();
     this.endCheck();
@@ -82,8 +86,17 @@ export class Sim {
     mix(this.gold);
     mix(this.lives);
     mix(this.rng.state);
-    for (const e of this.enemies.values()) (mix(e.id), mix(e.dist), mix(e.hp), mix(e.laneOffset), mix(e.shredStacks), mix(e.shredTicks));
-    for (const t of this.towers.values()) (mix(t.id), mix(t.cooldown), mix(t.tier));
+    for (const e of this.enemies.values()) {
+      mix(e.id);
+      mix(e.dist);
+      mix(e.hp);
+      mix(e.laneOffset);
+      mix(e.shredStacks);
+      mix(e.shredTicks);
+      mix(e.blockers.length);
+    }
+    for (const t of this.towers.values()) (mix(t.id), mix(t.cooldown), mix(t.tier), mix(t.rallyX), mix(t.rallyY));
+    for (const s of this.soldiers.values()) (mix(s.id), mix(s.x), mix(s.y), mix(s.hp), mix(s.targetId));
     for (const p of this.projectiles.values()) (mix(p.id), mix(p.x), mix(p.y), mix(p.ticksLeft));
     return h >>> 0;
   }
@@ -100,7 +113,7 @@ export class Sim {
   }
 
   private buildSchedule(): SpawnEntry[] {
-    // Milestone (a): only the first wave, auto-started. Wave sequencing/economy arrive in (d).
+    // Milestone (a)-(c): only the first wave, auto-started. Wave sequencing/economy arrive in (d).
     const wave = this.data.waves.waves[0];
     if (!wave) return [];
     const out: (SpawnEntry & { order: number })[] = [];
@@ -120,11 +133,14 @@ export class Sim {
     return out;
   }
 
+  // ---------------------------------------------------------------- commands
+
   private applyCommands(): void {
     const cmds = this.pending;
     this.pending = [];
     for (const cmd of cmds) {
       if (cmd.type === 'placeTower') this.placeTower(cmd.spotId, cmd.towerId);
+      else if (cmd.type === 'setRally') this.setRally(cmd.towerId, cmd.x, cmd.y);
     }
   }
 
@@ -150,10 +166,46 @@ export class Sim {
       tier: 0,
       cooldown: 0,
       invested: cost,
+      rallyX: spot.x,
+      rallyY: spot.y,
+      slots: [],
     };
+    if (def.family === 'meleeBarracks') {
+      const tier = def.tiers[0] as BarracksTier;
+      tower.slots = Array.from({ length: tier.soldierCount }, () => ({ soldierId: 0, respawn: 0 }));
+      const [rx, ry] = this.defaultRally(tower.x, tower.y, tier.rallyRange);
+      tower.rallyX = rx;
+      tower.rallyY = ry;
+    }
     this.towers.set(tower.id, tower);
     this.emit({ type: 'towerPlaced', tick: this.tick, id: tower.id });
   }
+
+  /** Default rally: the point of any path closest to the tower, if within rallyRange; else just below the tower. */
+  private defaultRally(x: number, y: number, rallyRange: number): [number, number] {
+    let best: { x: number; y: number; dist: number } | undefined;
+    for (const path of Object.values(this.paths)) {
+      const c = path.closestPoint(x, y);
+      if (!best || c.dist < best.dist) best = c;
+    }
+    if (best && best.dist <= rallyRange) return [best.x, best.y];
+    return [x, y + 30];
+  }
+
+  private setRally(towerId: number, x: number, y: number): void {
+    const tower = this.towers.get(towerId);
+    const def = tower && this.data.towers[tower.defId];
+    const reject = (reason: string) => this.emit({ type: 'commandRejected', tick: this.tick, reason });
+    if (!tower || !def || def.family !== 'meleeBarracks') return reject('not a barracks');
+    const range = (def.tiers[tower.tier] as BarracksTier).rallyRange;
+    const d = Math.hypot(x - tower.x, y - tower.y);
+    // Clamp into range rather than reject, so a slightly-far click still does something useful.
+    const k = d > range ? range / d : 1;
+    tower.rallyX = tower.x + (x - tower.x) * k;
+    tower.rallyY = tower.y + (y - tower.y) * k;
+  }
+
+  // ------------------------------------------------------------------ enemies
 
   private spawnSystem(): void {
     while (this.spawnIdx < this.schedule.length && (this.schedule[this.spawnIdx] as SpawnEntry).tick <= this.tick) {
@@ -181,6 +233,8 @@ export class Sim {
         shredMagic: 0,
         shredStacks: 0,
         shredTicks: 0,
+        blockers: [],
+        attackCooldown: 0,
       };
       [enemy.x, enemy.y] = this.positionAt(enemy, 0);
       enemy.prevX = enemy.x;
@@ -208,6 +262,7 @@ export class Sim {
       if (!def || !path) continue;
       e.prevX = e.x;
       e.prevY = e.y;
+      if (e.blockers.length > 0) continue; // held in melee by a soldier
       e.dist += def.speed / rate;
       if (e.dist >= path.length) {
         this.enemies.delete(e.id);
@@ -219,16 +274,194 @@ export class Sim {
     }
   }
 
+  /** Blocked enemies swing at their primary blocker (the first soldier that made contact). */
+  private enemyCombatSystem(): void {
+    for (const e of this.enemies.values()) {
+      if (e.blockers.length === 0) continue;
+      const def = this.data.enemies[e.defId];
+      if (!def?.melee) continue;
+      if (e.attackCooldown > 0) {
+        e.attackCooldown--;
+        continue;
+      }
+      const soldier = this.soldiers.get(e.blockers[0] as number);
+      const sDef = soldier && this.data.soldiers[soldier.defId];
+      if (!soldier || !sDef) continue;
+      const dealt = damageAfterResist(def.melee.damage, def.melee.damageType, sDef.armor, sDef.magicResist, this.data.config);
+      soldier.hp -= dealt;
+      e.attackCooldown = Math.max(1, this.ticks(def.melee.cooldown));
+      this.emit({ type: 'meleeHit', tick: this.tick, attackerId: e.id, targetId: soldier.id, damage: dealt, onSoldier: true });
+      if (soldier.hp <= 0) this.killSoldier(soldier);
+    }
+  }
+
+  // ----------------------------------------------------------------- barracks
+
+  private barracksSystem(): void {
+    for (const tower of this.towers.values()) {
+      const def = this.data.towers[tower.defId];
+      if (!def || def.family !== 'meleeBarracks') continue;
+      const tier = def.tiers[tower.tier] as BarracksTier;
+      tower.slots.forEach((slot, i) => {
+        if (slot.soldierId !== 0) return;
+        if (slot.respawn > 0) {
+          slot.respawn--;
+          return;
+        }
+        const sDef = this.data.soldiers[tier.soldierId];
+        if (!sDef) return;
+        const soldier: Soldier = {
+          id: this.nextId++,
+          defId: tier.soldierId,
+          towerId: tower.id,
+          slot: i,
+          x: tower.x,
+          y: tower.y,
+          prevX: tower.x,
+          prevY: tower.y,
+          hp: sDef.hp,
+          maxHp: sDef.hp,
+          targetId: 0,
+          state: 'moving',
+          cooldown: 0,
+        };
+        this.soldiers.set(soldier.id, soldier);
+        slot.soldierId = soldier.id;
+        this.emit({ type: 'soldierSpawned', tick: this.tick, id: soldier.id });
+      });
+    }
+  }
+
+  private killSoldier(s: Soldier): void {
+    this.releaseTarget(s);
+    this.soldiers.delete(s.id);
+    const tower = this.towers.get(s.towerId);
+    const def = tower && this.data.towers[tower.defId];
+    const slot = tower?.slots[s.slot];
+    if (slot && def && def.family === 'meleeBarracks') {
+      slot.soldierId = 0;
+      slot.respawn = this.ticks((def.tiers[tower.tier] as BarracksTier).respawn);
+    }
+    this.emit({ type: 'soldierKilled', tick: this.tick, id: s.id });
+  }
+
+  /** Drops the soldier's target and removes it from that enemy's blocker list. */
+  private releaseTarget(s: Soldier): void {
+    const e = this.enemies.get(s.targetId);
+    if (e) e.blockers = e.blockers.filter((id) => id !== s.id);
+    s.targetId = 0;
+  }
+
+  /** Flyers and enemies with the bypassBlockers trait cannot be blocked. */
+  private blockable(defId: string): boolean {
+    const def = this.data.enemies[defId];
+    return !!def && !def.flying && !def.traits.some((t) => t.type === 'bypassBlockers');
+  }
+
+  private soldierSystem(): void {
+    const cfg = this.data.config;
+    const rate = cfg.tickRate;
+    // How many soldiers already target each enemy (updated as soldiers pick targets this tick).
+    const targeters = new Map<number, number>();
+    for (const s of this.soldiers.values()) {
+      if (s.targetId !== 0) targeters.set(s.targetId, (targeters.get(s.targetId) ?? 0) + 1);
+    }
+
+    for (const s of [...this.soldiers.values()]) {
+      const sDef = this.data.soldiers[s.defId] as SoldierDef;
+      const tower = this.towers.get(s.towerId);
+      if (!tower) continue;
+      s.prevX = s.x;
+      s.prevY = s.y;
+      if (s.cooldown > 0) s.cooldown--;
+
+      // Keep or drop the current target (leash is 1.5x the acquire radius to avoid thrashing).
+      let target = s.targetId !== 0 ? this.enemies.get(s.targetId) : undefined;
+      if (s.targetId !== 0 && !(target && this.blockable(target.defId) && this.within(target, tower, sDef.engageRadius * 1.5))) {
+        const prev = s.targetId;
+        this.releaseTarget(s);
+        targeters.set(prev, Math.max(0, (targeters.get(prev) ?? 1) - 1));
+        target = undefined;
+      }
+      if (!target) {
+        let best: Enemy | undefined;
+        for (const e of this.enemies.values()) {
+          if (!this.blockable(e.defId) || !this.within(e, tower, sDef.engageRadius)) continue;
+          if ((targeters.get(e.id) ?? 0) >= cfg.maxSoldiersPerEnemy) continue;
+          if (!best || e.dist > best.dist) best = e;
+        }
+        if (best) {
+          target = best;
+          s.targetId = best.id;
+          targeters.set(best.id, (targeters.get(best.id) ?? 0) + 1);
+        }
+      }
+
+      if (target) {
+        const dx = target.x - s.x;
+        const dy = target.y - s.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist <= sDef.reach) {
+          s.state = 'fighting';
+          if (!target.blockers.includes(s.id)) target.blockers.push(s.id);
+          if (s.cooldown === 0) this.soldierAttack(s, sDef, target);
+        } else {
+          s.state = 'moving';
+          target.blockers = target.blockers.filter((id) => id !== s.id);
+          const step = Math.min(dist - sDef.reach * 0.5, sDef.speed / rate);
+          s.x += (dx / dist) * step;
+          s.y += (dy / dist) * step;
+        }
+      } else {
+        const [fx, fy] = this.formationSpot(tower, s.slot);
+        const dx = fx - s.x;
+        const dy = fy - s.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 0.5) {
+          s.state = 'moving';
+          const step = Math.min(dist, sDef.speed / rate);
+          s.x += (dx / dist) * step;
+          s.y += (dy / dist) * step;
+        } else {
+          s.state = 'idle';
+          s.hp = Math.min(s.maxHp, s.hp + sDef.regenPerSec / rate);
+        }
+      }
+    }
+  }
+
+  private within(e: Enemy, tower: Tower, radius: number): boolean {
+    return Math.hypot(e.x - tower.rallyX, e.y - tower.rallyY) <= radius;
+  }
+
+  private formationSpot(tower: Tower, slot: number): [number, number] {
+    const n = tower.slots.length;
+    if (n <= 1) return [tower.rallyX, tower.rallyY];
+    const a = (slot / n) * Math.PI * 2;
+    const r = this.data.config.soldierFormationRadius;
+    return [tower.rallyX + Math.cos(a) * r, tower.rallyY + Math.sin(a) * r];
+  }
+
+  private soldierAttack(s: Soldier, sDef: SoldierDef, target: Enemy): void {
+    const raw = this.rng.range(sDef.damage[0], sDef.damage[1]);
+    s.cooldown = Math.max(1, this.ticks(sDef.cooldown));
+    const dealt = this.damageEnemy(target, raw, sDef.damageType, 0, 0);
+    this.emit({ type: 'meleeHit', tick: this.tick, attackerId: s.id, targetId: target.id, damage: dealt, onSoldier: false });
+  }
+
+  // ------------------------------------------------------------------ shooters
+
   private towerSystem(): void {
     const cfg = this.data.config;
     for (const tower of this.towers.values()) {
+      const def = this.data.towers[tower.defId];
+      if (!def || def.family === 'meleeBarracks') continue;
       if (tower.cooldown > 0) {
         tower.cooldown--;
         continue;
       }
-      const def = this.data.towers[tower.defId];
-      const tier = def?.tiers[tower.tier];
-      if (!def || !tier) continue;
+      const tier = def.tiers[tower.tier];
+      if (!tier) continue;
 
       // Default targeting: furthest along the path within range. Ties go to the lowest id (iteration order).
       let target: Enemy | undefined;
@@ -309,23 +542,30 @@ export class Sim {
     }
   }
 
-  /** Applies one projectile hit (scaled by factor) including resist, penetration, shred, bounty. */
+  /** Applies one projectile hit (scaled by factor), then shred if the target survived. */
   private hitEnemy(e: Enemy, p: Projectile, factor: number): void {
+    const dealt = this.damageEnemy(e, p.damage * factor, p.damageType, p.armorPen, p.magicPen);
+    this.emit({ type: 'projectileHit', tick: this.tick, id: p.id, targetId: e.id, damage: dealt });
+    if (p.shred && e.hp > 0) this.applyShred(e, p.shred);
+  }
+
+  /**
+   * Single entry point for damage to enemies. Resist is reduced by active shred plus `armorPen`/`magicPen`
+   * for this hit. Kills pay the bounty. Returns the damage actually dealt after resist.
+   */
+  private damageEnemy(e: Enemy, raw: number, type: DamageType, armorPen: number, magicPen: number): number {
     const def = this.data.enemies[e.defId];
-    if (!def) return;
-    const dealt = damageAfterResist(p.damage * factor, p.damageType, def.armor, def.magicResist, this.data.config, {
-      armorReduction: e.shredArmor + p.armorPen,
-      magicReduction: e.shredMagic + p.magicPen,
+    if (!def) return 0;
+    const dealt = damageAfterResist(raw, type, def.armor, def.magicResist, this.data.config, {
+      armorReduction: e.shredArmor + armorPen,
+      magicReduction: e.shredMagic + magicPen,
     });
     e.hp -= dealt;
-    this.emit({ type: 'projectileHit', tick: this.tick, id: p.id, targetId: e.id, damage: dealt });
-    if (e.hp <= 0) {
-      this.enemies.delete(e.id);
+    if (e.hp <= 0 && this.enemies.delete(e.id)) {
       this.gold += def.bounty;
       this.emit({ type: 'enemyKilled', tick: this.tick, id: e.id, gold: def.bounty });
-    } else if (p.shred) {
-      this.applyShred(e, p.shred);
     }
+    return dealt;
   }
 
   /** Shred lands after the damage of the hit that applied it. */

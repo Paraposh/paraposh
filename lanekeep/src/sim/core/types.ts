@@ -1,6 +1,8 @@
 import type { DamageType, ShredDef } from '../../data/types';
 
-export type Command = { type: 'placeTower'; spotId: string; towerId: string };
+export type Command =
+  | { type: 'placeTower'; spotId: string; towerId: string }
+  | { type: 'setRally'; towerId: number; x: number; y: number };
 
 export type SimStatus = 'prepare' | 'wave' | 'won' | 'lost';
 
@@ -23,6 +25,10 @@ export interface Enemy {
   shredStacks: number;
   /** Ticks until shred falls off. */
   shredTicks: number;
+  /** Soldier ids currently in contact with this enemy. While non-empty the enemy stops. */
+  blockers: number[];
+  /** Ticks until the enemy's next melee swing. */
+  attackCooldown: number;
 }
 
 export interface Tower {
@@ -35,6 +41,27 @@ export interface Tower {
   /** Ticks until the tower may fire again. */
   cooldown: number;
   invested: number;
+  /** Barracks only. */
+  rallyX: number;
+  rallyY: number;
+  slots: { soldierId: number; respawn: number }[];
+}
+
+export interface Soldier {
+  id: number;
+  defId: string;
+  towerId: number;
+  slot: number;
+  x: number;
+  y: number;
+  prevX: number;
+  prevY: number;
+  hp: number;
+  maxHp: number;
+  /** 0 = none. */
+  targetId: number;
+  state: 'moving' | 'idle' | 'fighting';
+  cooldown: number;
 }
 
 export interface Projectile {
@@ -64,6 +91,9 @@ export type SimEvent =
   | { type: 'towerPlaced'; tick: number; id: number }
   | { type: 'projectileFired'; tick: number; id: number }
   | { type: 'projectileHit'; tick: number; id: number; targetId: number; damage: number }
+  | { type: 'soldierSpawned'; tick: number; id: number }
+  | { type: 'soldierKilled'; tick: number; id: number }
+  | { type: 'meleeHit'; tick: number; attackerId: number; targetId: number; damage: number; onSoldier: boolean }
   | { type: 'splashImpact'; tick: number; x: number; y: number; radius: number }
   | { type: 'commandRejected'; tick: number; reason: string }
   | { type: 'won'; tick: number }

@@ -4,7 +4,7 @@ import { damageAfterResist, effectiveResist } from '../../src/sim/math/damage';
 import { splashFactor } from '../../src/sim/math/splash';
 import { Sim } from '../../src/sim/sim';
 import type { Enemy, SimEvent } from '../../src/sim/core/types';
-import { cloneData, loadData } from '../helpers';
+import { cloneData, injectEnemy, loadData, shooterTier } from '../helpers';
 
 const cfg = { resistMin: 0, resistMax: 0.9 };
 
@@ -42,19 +42,7 @@ function setup(mut?: (d: GameData) => void): Sim {
   return new Sim(d, 1);
 }
 
-function inject(sim: Sim, defId: string, dist: number, id: number): Enemy {
-  const e: Enemy = {
-    id, defId, pathId: 'main', laneOffset: 0, dist,
-    hp: (sim.data.enemies[defId] as { hp: number }).hp, maxHp: 0, x: 0, y: 0, prevX: 0, prevY: 0,
-    shredArmor: 0, shredMagic: 0, shredStacks: 0, shredTicks: 0,
-  };
-  e.maxHp = e.hp;
-  [e.x, e.y] = sim.positionAt(e, dist);
-  e.prevX = e.x;
-  e.prevY = e.y;
-  sim.enemies.set(id, e);
-  return e;
-}
+const inject = (sim: Sim, defId: string, dist: number, id: number): Enemy => injectEnemy(sim, defId, dist, id);
 
 /** Run until the first projectileHit event batch and return all hit events. */
 function firstHits(sim: Sim, maxTicks = 600): Extract<SimEvent, { type: 'projectileHit' }>[] {
@@ -69,7 +57,7 @@ function firstHits(sim: Sim, maxTicks = 600): Extract<SimEvent, { type: 'project
 describe('armor penetration', () => {
   const dmgWithPen = (pen: number) => {
     const sim = setup((d) => {
-      d.towers['archer']!.tiers[0]!.armorPen = pen;
+      shooterTier(d, 'archer').armorPen = pen;
       d.enemies['armored_brute']!.hp = 10000;
     });
     sim.queue({ type: 'placeTower', spotId: 's1', towerId: 'archer' });
@@ -99,13 +87,13 @@ describe('magic damage', () => {
   });
   it('archer physical vs wisp is unaffected by magic resist', () => {
     const sim = setup((d) => {
-      d.towers['archer']!.tiers[0]!.armorPen = 0;
+      shooterTier(d, 'archer').armorPen = 0;
       d.enemies['arcane_wisp']!.hp = 10000;
     });
     sim.queue({ type: 'placeTower', spotId: 's1', towerId: 'archer' });
     inject(sim, 'arcane_wisp', 400, 900);
     const hit = firstHits(sim)[0]!;
-    const tier = sim.data.towers['archer']!.tiers[0]!;
+    const tier = shooterTier(sim.data, 'archer');
     expect(hit.damage).toBeGreaterThanOrEqual(tier.damage[0]);
     expect(hit.damage).toBeLessThanOrEqual(tier.damage[1]);
   });
@@ -115,7 +103,7 @@ describe('shred', () => {
   it('stacks up to maxStacks, raises later damage, and falls off after the duration', () => {
     const sim = setup((d) => {
       d.enemies['armored_brute']!.hp = 1e6;
-      const mortar = d.towers['mortar']!.tiers[0]!;
+      const mortar = shooterTier(d, 'mortar');
       mortar.damage = [100, 100]; // remove the roll
       mortar.cooldown = 0.5;
       mortar.minRange = 0;
@@ -151,7 +139,7 @@ describe('shred', () => {
 describe('splash artillery', () => {
   function splashRun(positions: { dist: number; flying?: boolean }[]) {
     const sim = setup((d) => {
-      const m = d.towers['mortar']!.tiers[0]!;
+      const m = shooterTier(d, 'mortar');
       m.damage = [100, 100];
       m.shred = undefined;
       m.splash = { radius: 80 };
@@ -192,7 +180,7 @@ describe('splash artillery', () => {
 
   it('minRange: targets inside it are ignored', () => {
     const sim = setup((d) => {
-      d.towers['mortar']!.tiers[0]!.minRange = 500; // larger than range: nothing is ever eligible
+      shooterTier(d, 'mortar').minRange = 500; // larger than range: nothing is ever eligible
     });
     sim.queue({ type: 'placeTower', spotId: 's1', towerId: 'mortar' });
     inject(sim, 'goblin_runner', 400, 900);
@@ -205,8 +193,8 @@ describe('splash artillery', () => {
 describe('shipped balance sanity', () => {
   it('armored brutes take noticeably more from mage than archer per hit', () => {
     const d = loadData();
-    const archer = d.towers['archer']!.tiers[0]!;
-    const mage = d.towers['mage']!.tiers[0]!;
+    const archer = shooterTier(d, 'archer');
+    const mage = shooterTier(d, 'mage');
     const brute = d.enemies['armored_brute']!;
     const avg = (t: typeof archer) => (t.damage[0] + t.damage[1]) / 2;
     const a = damageAfterResist(avg(archer), archer.damageType, brute.armor, brute.magicResist, d.config, {

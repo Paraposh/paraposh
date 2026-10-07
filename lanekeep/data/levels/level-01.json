@@ -43,7 +43,8 @@
       "allowed": [
         "archer",
         "mage",
-        "mortar"
+        "mortar",
+        "barracks"
       ]
     },
     {
@@ -53,7 +54,8 @@
       "allowed": [
         "archer",
         "mage",
-        "mortar"
+        "mortar",
+        "barracks"
       ]
     },
     {
@@ -63,14 +65,16 @@
       "allowed": [
         "archer",
         "mage",
-        "mortar"
+        "mortar",
+        "barracks"
       ]
     }
   ],
   "availableTowers": [
     "archer",
     "mage",
-    "mortar"
+    "mortar",
+    "barracks"
   ],
   "heroSpawn": [
     200,

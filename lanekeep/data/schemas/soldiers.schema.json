@@ -1,0 +1,75 @@
+{
+  "type": "object",
+  "additionalProperties": {
+    "type": "object",
+    "additionalProperties": false,
+    "required": [
+      "name",
+      "hp",
+      "armor",
+      "magicResist",
+      "speed",
+      "damage",
+      "damageType",
+      "cooldown",
+      "regenPerSec",
+      "engageRadius",
+      "reach"
+    ],
+    "properties": {
+      "name": {
+        "type": "string"
+      },
+      "hp": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
+      "armor": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "magicResist": {
+        "type": "number",
+        "minimum": 0,
+        "maximum": 1
+      },
+      "speed": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
+      "damage": {
+        "type": "array",
+        "minItems": 2,
+        "maxItems": 2,
+        "items": {
+          "type": "number",
+          "minimum": 0
+        }
+      },
+      "damageType": {
+        "enum": [
+          "physical",
+          "magic",
+          "true"
+        ]
+      },
+      "cooldown": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
+      "regenPerSec": {
+        "type": "number",
+        "minimum": 0
+      },
+      "engageRadius": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      },
+      "reach": {
+        "type": "number",
+        "exclusiveMinimum": 0
+      }
+    }
+  }
+}

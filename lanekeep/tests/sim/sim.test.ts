@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { GameData } from '../../src/data/types';
 import { Sim } from '../../src/sim/sim';
-import { cloneData, loadData, runUntil } from '../helpers';
+import { cloneData, injectEnemy, loadData, runUntil, shooterTier } from '../helpers';
 
 const totalLivesCost = (d: GameData): number =>
   (d.waves.waves[0] as { groups: { enemyId: string; count: number }[] }).groups.reduce(
@@ -67,13 +67,7 @@ describe('milestone (a): one path, one enemy, one tower', () => {
     place(sim, 's1');
     sim.step();
     // inject two enemies near the tower with different progress
-    const mk = (dist: number) => {
-      const id = 9000 + dist;
-      const e = { id, defId: 'goblin_runner', pathId: 'main', laneOffset: 0, dist, hp: 60, maxHp: 60, x: 0, y: 0, prevX: 0, prevY: 0, shredArmor: 0, shredMagic: 0, shredStacks: 0, shredTicks: 0 };
-      [e.x, e.y] = sim.positionAt(e, dist);
-      sim.enemies.set(id, e);
-      return e;
-    };
+    const mk = (dist: number) => injectEnemy(sim, 'goblin_runner', dist, 9000 + dist);
     const behind = mk(380);
     const ahead = mk(420);
     const tower = [...sim.towers.values()][0]!;
@@ -102,7 +96,7 @@ describe('milestone (a): one path, one enemy, one tower', () => {
     const hit = (armor: number) => {
       const d = cloneData(loadData());
       d.enemies['goblin_runner']!.armor = armor;
-      d.towers['archer']!.tiers[0]!.armorPen = 0;
+      shooterTier(d, 'archer').armorPen = 0;
       d.enemies['goblin_runner']!.hp = 10000;
       const sim = new Sim(d, 5);
       place(sim, 's1');

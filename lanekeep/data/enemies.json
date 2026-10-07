@@ -9,7 +9,12 @@
     "livesCost": 1,
     "flying": false,
     "radius": 10,
-    "traits": []
+    "traits": [],
+    "melee": {
+      "damage": 6,
+      "damageType": "physical",
+      "cooldown": 1.0
+    }
   },
   "armored_brute": {
     "name": "Armored Brute",
@@ -21,7 +26,12 @@
     "livesCost": 2,
     "flying": false,
     "radius": 13,
-    "traits": []
+    "traits": [],
+    "melee": {
+      "damage": 14,
+      "damageType": "physical",
+      "cooldown": 1.4
+    }
   },
   "arcane_wisp": {
     "name": "Arcane Wisp",
@@ -33,7 +43,11 @@
     "livesCost": 1,
     "flying": false,
     "radius": 9,
-    "traits": []
+    "traits": [
+      {
+        "type": "bypassBlockers"
+      }
+    ]
   },
   "cave_bat": {
     "name": "Cave Bat",

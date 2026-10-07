@@ -4,8 +4,8 @@ import { Sim } from './sim/sim';
 import { FixedStepLoop } from './sim/loop';
 
 const SEED = 1234;
-const TOWER_KEYS: Record<string, string> = { q: 'archer', w: 'mage', e: 'mortar' };
-const TOWER_COLORS: Record<string, number> = { archer: 0xc8a24a, mage: 0x7a6adf, mortar: 0xb06a3a };
+const TOWER_KEYS: Record<string, string> = { q: 'archer', w: 'mage', e: 'mortar', r: 'barracks' };
+const TOWER_COLORS: Record<string, number> = { archer: 0xc8a24a, mage: 0x7a6adf, mortar: 0xb06a3a, barracks: 0x4a78c8 };
 const ENEMY_COLORS: Record<string, number> = {
   goblin_runner: 0x8a3030,
   armored_brute: 0x6a6f7a,
@@ -27,6 +27,21 @@ async function boot(): Promise<void> {
   const rings: { x: number; y: number; r: number; age: number }[] = [];
   const g = new Graphics();
   app.stage.addChild(g);
+
+  // Right-click: move the rally point of the nearest barracks (it clamps to the barracks' range).
+  app.canvas.addEventListener('contextmenu', (ev) => {
+    ev.preventDefault();
+    const r = app.canvas.getBoundingClientRect();
+    const x = ((ev.clientX - r.left) / r.width) * width;
+    const y = ((ev.clientY - r.top) / r.height) * height;
+    let best: { id: number; d: number } | undefined;
+    for (const t of sim.towers.values()) {
+      if (t.slots.length === 0) continue;
+      const d = Math.hypot(t.x - x, t.y - y);
+      if (!best || d < best.d) best = { id: t.id, d };
+    }
+    if (best) sim.queue({ type: 'setRally', towerId: best.id, x, y });
+  });
 
   // Click an empty build spot to place the archer.
   app.canvas.addEventListener('pointerdown', (ev) => {
@@ -62,6 +77,15 @@ async function boot(): Promise<void> {
     }
     for (const s of data.level.buildSpots) g.circle(s.x, s.y, 18).fill({ color: 0x3a4a60 });
     for (const t of sim.towers.values()) g.circle(t.x, t.y, 16).fill({ color: TOWER_COLORS[t.defId] ?? 0xffffff });
+    for (const t of sim.towers.values()) {
+      if (t.slots.length > 0) g.circle(t.rallyX, t.rallyY, 5).stroke({ width: 2, color: 0x4a78c8 });
+    }
+    for (const sd of sim.soldiers.values()) {
+      const x = lerp(sd.prevX, sd.x);
+      const y = lerp(sd.prevY, sd.y);
+      g.circle(x, y, 7).fill({ color: 0x4a78c8 });
+      g.rect(x - 9, y - 14, 18 * (sd.hp / sd.maxHp), 3).fill({ color: 0x60c0ff });
+    }
     for (const e of sim.enemies.values()) {
       const x = lerp(e.prevX, e.x);
       const y = lerp(e.prevY, e.y);
@@ -76,7 +100,7 @@ async function boot(): Promise<void> {
       if (ring.age > 0.35) rings.splice(i, 1);
       else g.circle(ring.x, ring.y, ring.r * (0.4 + ring.age * 1.7)).stroke({ width: 2, color: 0xffd9a0, alpha: 1 - ring.age / 0.35 });
     }
-    hud.textContent = `gold ${sim.gold}  lives ${sim.lives}  status ${sim.status}  speed ${loop.speed}x  tower ${selected}  (Q archer 70, W mage 100, E mortar 120 | click a spot to build | space = pause, 1 / 2 = speed)`;
+    hud.textContent = `gold ${sim.gold}  lives ${sim.lives}  status ${sim.status}  speed ${loop.speed}x  tower ${selected}  (Q archer 70, W mage 100, E mortar 120, R barracks 70 | click a spot to build | right-click moves rally | space = pause, 1 / 2 = speed)`;
   });
 }
 

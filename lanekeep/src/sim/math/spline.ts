@@ -44,6 +44,17 @@ export class SplinePath {
     this.length = this.cum[this.cum.length - 1] as number;
   }
 
+  /** Closest sampled point on the path to (x, y), scanning every `step` units of arc length. */
+  closestPoint(x: number, y: number, step = 6): { x: number; y: number; dist: number; d: number } {
+    let best = { x: 0, y: 0, dist: Infinity, d: 0 };
+    for (let d = 0; d <= this.length + step; d += step) {
+      const s = this.sample(d);
+      const dist = Math.hypot(s.x - x, s.y - y);
+      if (dist < best.dist) best = { x: s.x, y: s.y, dist, d };
+    }
+    return best;
+  }
+
   /** Position and normal at arc distance d (clamped to [0, length]). */
   sample(d: number): PathSample {
     const dist = Math.min(Math.max(d, 0), this.length);
