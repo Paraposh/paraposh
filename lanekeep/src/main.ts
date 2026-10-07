@@ -4,6 +4,14 @@ import { Sim } from './sim/sim';
 import { FixedStepLoop } from './sim/loop';
 
 const SEED = 1234;
+const TOWER_KEYS: Record<string, string> = { q: 'archer', w: 'mage', e: 'mortar' };
+const TOWER_COLORS: Record<string, number> = { archer: 0xc8a24a, mage: 0x7a6adf, mortar: 0xb06a3a };
+const ENEMY_COLORS: Record<string, number> = {
+  goblin_runner: 0x8a3030,
+  armored_brute: 0x6a6f7a,
+  arcane_wisp: 0x4fb6c9,
+  cave_bat: 0xb8a0d8,
+};
 
 async function boot(): Promise<void> {
   const data = loadBundledData();
@@ -15,6 +23,8 @@ async function boot(): Promise<void> {
   await app.init({ width, height, background: 0x1b2a1f, antialias: true });
   document.getElementById('game')?.appendChild(app.canvas);
   const hud = document.getElementById('hud') as HTMLElement;
+  let selected = 'archer';
+  const rings: { x: number; y: number; r: number; age: number }[] = [];
   const g = new Graphics();
   app.stage.addChild(g);
 
@@ -24,10 +34,12 @@ async function boot(): Promise<void> {
     const x = ((ev.clientX - r.left) / r.width) * width;
     const y = ((ev.clientY - r.top) / r.height) * height;
     for (const s of data.level.buildSpots) {
-      if (Math.hypot(s.x - x, s.y - y) < 24) sim.queue({ type: 'placeTower', spotId: s.id, towerId: 'archer' });
+      if (Math.hypot(s.x - x, s.y - y) < 24) sim.queue({ type: 'placeTower', spotId: s.id, towerId: selected });
     }
   });
   window.addEventListener('keydown', (ev) => {
+    const pick = TOWER_KEYS[ev.key.toLowerCase()];
+    if (pick) selected = pick;
     if (ev.key === ' ') loop.speed = 0;
     if (ev.key === '1') loop.speed = 1;
     if (ev.key === '2') loop.speed = 2;
@@ -36,7 +48,7 @@ async function boot(): Promise<void> {
   app.ticker.add((t) => {
     const alpha = loop.advance(t.deltaMS / 1000);
     const lerp = (a: number, b: number) => a + (b - a) * alpha;
-    sim.drainEvents();
+    for (const e of sim.drainEvents()) if (e.type === 'splashImpact') rings.push({ x: e.x, y: e.y, r: e.radius, age: 0 });
     g.clear();
     for (const [id, p] of Object.entries(data.level.paths)) {
       const path = sim.paths[id];
@@ -49,15 +61,22 @@ async function boot(): Promise<void> {
       g.stroke({ width: p.lanes * p.laneSpacing, color: 0x6b5a3a, alpha: 0.8 });
     }
     for (const s of data.level.buildSpots) g.circle(s.x, s.y, 18).fill({ color: 0x3a4a60 });
-    for (const t of sim.towers.values()) g.circle(t.x, t.y, 16).fill({ color: 0xc8a24a });
+    for (const t of sim.towers.values()) g.circle(t.x, t.y, 16).fill({ color: TOWER_COLORS[t.defId] ?? 0xffffff });
     for (const e of sim.enemies.values()) {
       const x = lerp(e.prevX, e.x);
       const y = lerp(e.prevY, e.y);
-      g.circle(x, y, 9).fill({ color: 0x8a3030 });
+      const flying = data.enemies[e.defId]?.flying ?? false;
+      g.circle(x, flying ? y - 8 : y, 9).fill({ color: ENEMY_COLORS[e.defId] ?? 0xaa3030 });
       g.rect(x - 10, y - 16, 20 * (e.hp / e.maxHp), 3).fill({ color: 0x40c060 });
     }
     for (const p of sim.projectiles.values()) g.circle(lerp(p.prevX, p.x), lerp(p.prevY, p.y), 3).fill({ color: 0xffffff });
-    hud.textContent = `gold ${sim.gold}  lives ${sim.lives}  status ${sim.status}  speed ${loop.speed}x  (click a spot to build, space = pause, 1 / 2 = speed)`;
+    for (let i = rings.length - 1; i >= 0; i--) {
+      const ring = rings[i]!;
+      ring.age += t.deltaMS / 1000;
+      if (ring.age > 0.35) rings.splice(i, 1);
+      else g.circle(ring.x, ring.y, ring.r * (0.4 + ring.age * 1.7)).stroke({ width: 2, color: 0xffd9a0, alpha: 1 - ring.age / 0.35 });
+    }
+    hud.textContent = `gold ${sim.gold}  lives ${sim.lives}  status ${sim.status}  speed ${loop.speed}x  tower ${selected}  (Q archer 70, W mage 100, E mortar 120 | click a spot to build | space = pause, 1 / 2 = speed)`;
   });
 }
 

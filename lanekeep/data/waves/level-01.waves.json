@@ -4,7 +4,34 @@
       "id": 1,
       "preDelay": 5,
       "groups": [
-        { "enemyId": "goblin_runner", "count": 8, "interval": 1.2, "startDelay": 0, "path": "main" }
+        {
+          "enemyId": "goblin_runner",
+          "count": 8,
+          "interval": 1.2,
+          "startDelay": 0,
+          "path": "main"
+        },
+        {
+          "enemyId": "armored_brute",
+          "count": 2,
+          "interval": 3,
+          "startDelay": 12,
+          "path": "main"
+        },
+        {
+          "enemyId": "arcane_wisp",
+          "count": 3,
+          "interval": 1.5,
+          "startDelay": 18,
+          "path": "main"
+        },
+        {
+          "enemyId": "cave_bat",
+          "count": 3,
+          "interval": 1.2,
+          "startDelay": 26,
+          "path": "main"
+        }
       ]
     }
   ]
