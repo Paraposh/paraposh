@@ -1,173 +1,148 @@
-import { Application, Graphics } from 'pixi.js';
-import { loadBundledData } from './data/load';
-import { Sim } from './sim/sim';
+import { Application } from 'pixi.js';
+import { loadCampaign, loadLevelData } from './data/load';
+import { GameFlow } from './game/flow';
+import { newProgress, recordResult } from './game/progress';
+import { Renderer } from './render/renderer';
+import { Sfx } from './audio/sfx';
 import { FixedStepLoop } from './sim/loop';
+import { Sim } from './sim/sim';
+import { nearestBarracks, pick } from './ui/picking';
+import { Ui } from './ui/ui';
+import type { SimEvent } from './sim/core/types';
 
-const SEED = 1234;
-const TOWER_KEYS: Record<string, string> = { q: 'archer', w: 'mage', e: 'mortar', r: 'barracks' };
-const TOWER_COLORS: Record<string, number> = { archer: 0xc8a24a, mage: 0x7a6adf, mortar: 0xb06a3a, barracks: 0x4a78c8 };
-const ENEMY_COLORS: Record<string, number> = {
-  goblin_runner: 0x8a3030,
-  armored_brute: 0x6a6f7a,
-  arcane_wisp: 0x4fb6c9,
-  cave_bat: 0xb8a0d8,
-  goblin_shaman: 0x4a9a4a,
-  goblin_archer: 0xb8742a,
-  ogre: 0x8a5a3a,
-  brood_mother: 0x7a2a6a,
-  warlord: 0xc03030,
-};
 
 async function boot(): Promise<void> {
-  const data = loadBundledData();
-  const sim = new Sim(data, SEED);
-  const loop = new FixedStepLoop(sim);
-  const { width, height } = data.level.world;
+  const campaign = loadCampaign();
+  const progress = newProgress();
+  const flow = new GameFlow();
+  const sfx = new Sfx();
+  let sim: Sim | undefined;
+  let loop: FixedStepLoop | undefined;
+  let newStars = 0;
+  let pointer: [number, number] = [0, 0];
 
+  const stage = document.getElementById('stage') as HTMLElement;
   const app = new Application();
-  await app.init({ width, height, background: 0x1b2a1f, antialias: true });
-  document.getElementById('game')?.appendChild(app.canvas);
-  const hud = document.getElementById('hud') as HTMLElement;
-  let selected = 'archer';
-  let selectedTowerId = 0;
-  let armedSpell: string | null = null;
-  const rings: { x: number; y: number; r: number; age: number }[] = [];
-  const g = new Graphics();
-  app.stage.addChild(g);
+  await app.init({ width: 1280, height: 720, background: 0x1b2a1f, antialias: true });
+  stage.insertBefore(app.canvas, stage.firstChild);
+  const renderer = new Renderer(app);
 
-  // Right-click: move the rally point of the nearest barracks (it clamps to the barracks' range).
+  const startLevel = (id: string): void => {
+    const data = loadLevelData(id);
+    // The seed is chosen here, outside the sim, so every attempt differs but each is reproducible from its seed.
+    sim = new Sim(data, (Math.random() * 0x7fffffff) | 0);
+    loop = new FixedStepLoop(sim);
+    loop.speed = ui.speed;
+    renderer.clear();
+    ui.closePopup();
+    ui.armedSpell = null;
+  };
+
+  const ui = new Ui(document.getElementById('ui') as HTMLElement, {
+    onPlay: () => { sfx.unlock(); sfx.play('click'); flow.openMap(); },
+    onSelectLevel: (id) => { sfx.play('click'); flow.startLevel(id); startLevel(id); },
+    onBackToMenu: () => flow.backToMenu(),
+    onRetry: () => { flow.retry(); startLevel(flow.levelId); },
+    onContinue: () => {
+      const r = flow.result;
+      const i = campaign.levels.findIndex((l) => l.id === flow.levelId);
+      const next = r?.won ? campaign.levels[i + 1] : undefined;
+      if (next) { flow.backToMap(); flow.startLevel(next.id); startLevel(next.id); } else flow.backToMap();
+    },
+    onQuitLevel: () => { sim = undefined; flow.backToMap(); },
+    onBuild: (spotId, towerId) => { sim?.queue({ type: 'placeTower', spotId, towerId }); ui.closePopup(); },
+    onUpgrade: (towerId) => sim?.queue({ type: 'upgradeTower', towerId }),
+    onSpecialize: (towerId, specId) => { sim?.queue({ type: 'specialize', towerId, specId }); ui.closePopup(); },
+    onSell: (towerId) => { sim?.queue({ type: 'sellTower', towerId }); ui.closePopup(); },
+    onCallWave: () => sim?.queue({ type: 'callWave' }),
+    onSpeed: (s) => { ui.speed = s; if (loop) loop.speed = s; },
+    onSpell: (key, needsTarget) => {
+      if (key.startsWith('hero:') || !needsTarget) sim?.queue({ type: 'heroAbility' });
+      else ui.armedSpell = ui.armedSpell === key ? null : key;
+    },
+    onMute: (m) => { sfx.muted = m; },
+  });
+
+  const toWorld = (ev: PointerEvent | MouseEvent): [number, number] => {
+    const r = app.canvas.getBoundingClientRect();
+    return [((ev.clientX - r.left) / r.width) * 1280, ((ev.clientY - r.top) / r.height) * 720];
+  };
+
+  app.canvas.addEventListener('pointermove', (ev) => { pointer = toWorld(ev); });
   app.canvas.addEventListener('contextmenu', (ev) => {
     ev.preventDefault();
-    const r = app.canvas.getBoundingClientRect();
-    const x = ((ev.clientX - r.left) / r.width) * width;
-    const y = ((ev.clientY - r.top) / r.height) * height;
-    let best: { id: number; d: number } | undefined;
-    for (const t of sim.towers.values()) {
-      if (t.slots.length === 0) continue;
-      const d = Math.hypot(t.x - x, t.y - y);
-      if (!best || d < best.d) best = { id: t.id, d };
-    }
-    if (best) sim.queue({ type: 'setRally', towerId: best.id, x, y });
+    if (!sim || flow.screen !== 'level') return;
+    const [x, y] = toWorld(ev);
+    const id = nearestBarracks(sim, x, y);
+    if (id !== undefined) sim.queue({ type: 'setRally', towerId: id, x, y });
   });
-
-  // Click an empty build spot to place the archer.
   app.canvas.addEventListener('pointerdown', (ev) => {
-    const r = app.canvas.getBoundingClientRect();
-    const x = ((ev.clientX - r.left) / r.width) * width;
-    const y = ((ev.clientY - r.top) / r.height) * height;
-    if (armedSpell) {
-      sim.queue({ type: 'castSpell', spellId: armedSpell, x, y });
-      armedSpell = null;
+    if (!sim || flow.screen !== 'level' || ev.button !== 0) return;
+    sfx.unlock();
+    const [x, y] = toWorld(ev);
+    if (ui.armedSpell) {
+      sim.queue({ type: 'castSpell', spellId: ui.armedSpell, x, y });
+      ui.armedSpell = null;
       return;
     }
-    let onSpot = false;
-    for (const s of data.level.buildSpots) {
-      if (Math.hypot(s.x - x, s.y - y) >= 24) continue;
-      onSpot = true;
-      const here = [...sim.towers.values()].find((t) => t.spotId === s.id);
-      if (here) selectedTowerId = here.id;
-      else sim.queue({ type: 'placeTower', spotId: s.id, towerId: selected });
+    const p = pick(sim, x, y);
+    if (p.kind === 'tower') ui.showTowerPopup(p.towerId);
+    else if (p.kind === 'spot') ui.showBuildPopup(p.spotId);
+    else {
+      ui.closePopup();
+      sim.queue({ type: 'moveHero', x, y });
     }
-    if (!onSpot) sim.queue({ type: 'moveHero', x, y });
   });
   window.addEventListener('keydown', (ev) => {
-    const pick = TOWER_KEYS[ev.key.toLowerCase()];
-    if (pick) selected = pick;
+    if (!sim || flow.screen !== 'level') return;
     const k = ev.key.toLowerCase();
-    const sel = sim.towers.get(selectedTowerId);
-    if (k === 'n') sim.queue({ type: 'callWave' });
-    if (k === 'm') armedSpell = 'meteor';
-    if (k === 'f') armedSpell = 'reinforcements';
-    if (k === 'h') sim.queue({ type: 'heroAbility' });
-    if (ev.key === 'Escape') armedSpell = null;
-    if (sel && k === 'u') sim.queue({ type: 'upgradeTower', towerId: sel.id });
-    if (sel && k === 's') sim.queue({ type: 'sellTower', towerId: sel.id });
-    if (sel && (k === 'z' || k === 'x')) {
-      const specs = Object.keys(data.towers[sel.defId]?.specializations ?? {});
-      const id = specs[k === 'z' ? 0 : 1];
-      if (id) sim.queue({ type: 'specialize', towerId: sel.id, specId: id });
-    }
-    if (ev.key === ' ') loop.speed = 0;
-    if (ev.key === '1') loop.speed = 1;
-    if (ev.key === '2') loop.speed = 2;
+    if (k === ' ') { ev.preventDefault(); ui.speed = ui.speed === 0 ? 1 : 0; if (loop) loop.speed = ui.speed; }
+    else if (k === '1' || k === '2') { ui.speed = Number(k); if (loop) loop.speed = ui.speed; }
+    else if (k === 'escape') { ui.armedSpell = null; ui.closePopup(); }
+    else if (k === 'n') sim.queue({ type: 'callWave' });
+    else if (k === 'h') sim.queue({ type: 'heroAbility' });
+    else if (k === 'm' && sim.data.level.spells.includes('meteor')) ui.armedSpell = 'meteor';
+    else if (k === 'f' && sim.data.level.spells.includes('reinforcements')) ui.armedSpell = 'reinforcements';
   });
 
-  app.ticker.add((t) => {
-    const alpha = loop.advance(t.deltaMS / 1000);
-    const lerp = (a: number, b: number) => a + (b - a) * alpha;
-    for (const e of sim.drainEvents()) if (e.type === 'splashImpact') rings.push({ x: e.x, y: e.y, r: e.radius, age: 0 });
-    g.clear();
-    for (const [id, p] of Object.entries(data.level.paths)) {
-      const path = sim.paths[id];
-      if (!path) continue;
-      for (let d = 0; d <= path.length; d += 8) {
-        const s = path.sample(d);
-        if (d === 0) g.moveTo(s.x, s.y);
-        else g.lineTo(s.x, s.y);
+  const SOUND: Partial<Record<SimEvent['type'], Parameters<Sfx['play']>[0]>> = {
+    projectileFired: 'shoot', projectileHit: 'hit', meleeHit: 'hit', enemyKilled: 'kill', towerPlaced: 'build',
+    towerUpgraded: 'build', spellCast: 'spell', spellImpact: 'spell', splashImpact: 'hit', enemyLeaked: 'leak',
+    waveStarted: 'wave', heroLevelUp: 'levelup', won: 'win', lost: 'lose',
+  };
+
+  let last = performance.now();
+  app.ticker.add(() => {
+    const now = performance.now();
+    const dt = Math.min(0.1, (now - last) / 1000);
+    last = now;
+
+    if (flow.screen === 'menu') return ui.menu();
+    if (flow.screen === 'map') return ui.map(campaign, progress.stars);
+    if (!sim || !loop) return;
+
+    const alpha = loop.advance(dt);
+    for (const ev of sim.drainEvents()) {
+      renderer.juice.handle(ev);
+      if (ev.type === 'towerPlaced') {
+        const t = sim.towers.get(ev.id);
+        if (t) renderer.juice.towerPlaced(t.x, t.y);
       }
-      g.stroke({ width: p.lanes * p.laneSpacing, color: 0x6b5a3a, alpha: 0.8 });
+      const s = SOUND[ev.type];
+      if (s) sfx.play(s);
     }
-    for (const s of data.level.buildSpots) g.circle(s.x, s.y, 18).fill({ color: 0x3a4a60 });
-    for (const t of sim.towers.values()) g.circle(t.x, t.y, 16).fill({ color: TOWER_COLORS[t.defId] ?? 0xffffff });
-    for (const fx of sim.effects) {
-      const sp = data.spells[fx.spellId];
-      if (sp?.kind !== 'areaDamage') continue;
-      const progress = 1 - fx.ticksLeft / Math.max(1, fx.totalTicks);
-      g.circle(fx.x, fx.y, sp.radius).stroke({ width: 2, color: 0xff7a40, alpha: 0.3 + 0.6 * progress });
-      g.circle(fx.x, fx.y, sp.radius * progress).fill({ color: 0xff7a40, alpha: 0.18 });
+    const armedDef = ui.armedSpell ? sim.data.spells[ui.armedSpell] : undefined;
+    renderer.draw(sim, alpha, { selectedTowerId: ui.selectedTowerId, armedSpellRadius: armedDef?.kind === 'areaDamage' ? armedDef.radius : null, pointer }, dt);
+
+    const result = flow.update(sim);
+    if (result) {
+      newStars = recordResult(progress, result);
+      const name = campaign.levels.find((l) => l.id === result.levelId)?.name ?? result.levelId;
+      const i = campaign.levels.findIndex((l) => l.id === result.levelId);
+      // Let the banner effects play for a moment before the results card appears.
+      setTimeout(() => ui.results(result, name, newStars, !!campaign.levels[i + 1]), 900);
     }
-    for (const t of sim.towers.values()) {
-      if (t.slots.length > 0) g.circle(t.rallyX, t.rallyY, 5).stroke({ width: 2, color: 0x4a78c8 });
-    }
-    for (const sd of sim.soldiers.values()) {
-      const x = lerp(sd.prevX, sd.x);
-      const y = lerp(sd.prevY, sd.y);
-      g.circle(x, y, 7).fill({ color: 0x4a78c8 });
-      g.rect(x - 9, y - 14, 18 * (sd.hp / sd.maxHp), 3).fill({ color: 0x60c0ff });
-    }
-    const hero = sim.hero;
-    if (hero && hero.state !== 'dead') {
-      const x = lerp(hero.prevX, hero.x);
-      const y = lerp(hero.prevY, hero.y);
-      g.circle(x, y, 10).fill({ color: 0xf2d060 }).stroke({ width: 2, color: 0x806010 });
-      g.rect(x - 12, y - 18, 24 * (hero.hp / hero.maxHp), 3).fill({ color: 0xf2d060 });
-      if (hero.moveX !== null && hero.moveY !== null) g.circle(hero.moveX, hero.moveY, 4).stroke({ width: 1, color: 0xf2d060 });
-    }
-    for (const e of sim.enemies.values()) {
-      const x = lerp(e.prevX, e.x);
-      const y = lerp(e.prevY, e.y);
-      const flying = data.enemies[e.defId]?.flying ?? false;
-      const radius = data.enemies[e.defId]?.radius ?? 9;
-      g.circle(x, flying ? y - 8 : y, radius).fill({ color: ENEMY_COLORS[e.defId] ?? 0xaa3030 });
-      if (e.enraged) g.circle(x, y, radius + 3).stroke({ width: 2, color: 0xff5030 });
-      g.rect(x - radius, y - radius - 7, radius * 2 * (e.hp / e.maxHp), 3).fill({ color: e.bossId ? 0xffb030 : 0x40c060 });
-    }
-    for (const p of sim.projectiles.values()) g.circle(lerp(p.prevX, p.x), lerp(p.prevY, p.y), 3).fill({ color: 0xffffff });
-    for (let i = rings.length - 1; i >= 0; i--) {
-      const ring = rings[i]!;
-      ring.age += t.deltaMS / 1000;
-      if (ring.age > 0.35) rings.splice(i, 1);
-      else g.circle(ring.x, ring.y, ring.r * (0.4 + ring.age * 1.7)).stroke({ width: 2, color: 0xffd9a0, alpha: 1 - ring.age / 0.35 });
-    }
-    const sel = sim.towers.get(selectedTowerId);
-    if (sel) g.circle(sel.x, sel.y, 24).stroke({ width: 2, color: 0xffffff });
-    const timer = sim.waveTimer;
-    const waveInfo = timer === null ? 'spawning' : `next wave in ${Math.ceil(timer / data.config.tickRate)}s (N calls it early)`;
-    const selInfo = sel
-      ? `  | selected ${sel.defId} tier ${sel.tier + 1}${sel.specId ? ' ' + sel.specId : ''} (U upgrade, Z/X specialize, S sell)`
-      : '';
-    const cd = (key: string, label: string) => {
-      const left = sim.cooldownLeft(key);
-      return left > 0 ? `${label} ${Math.ceil(left)}s` : `${label} ready`;
-    };
-    const heroInfo = hero
-      ? hero.state === 'dead'
-        ? `hero down ${Math.ceil(hero.reviveTicks / data.config.tickRate)}s`
-        : `hero L${hero.level} ${Math.ceil(hero.hp)}/${Math.ceil(hero.maxHp)}`
-      : '';
-    const spells = `${heroInfo} | ${cd('meteor', 'M meteor')} | ${cd('reinforcements', 'F reinforce')} | ${cd('hero:hero_slam', 'H slam')}${armedSpell ? ` | click to cast ${armedSpell}` : ''}`;
-    const end = sim.status === 'won' ? `  VICTORY ${'*'.repeat(sim.stars)}` : sim.status === 'lost' ? '  DEFEAT' : '';
-    hud.textContent = `gold ${sim.gold}  lives ${sim.lives}  wave ${sim.waveIndex}/${sim.waveCount}  ${waveInfo}  speed ${loop.speed}x  build ${selected}${selInfo}${end}  | ${spells}  (Q archer 70, W mage 100, E mortar 120, R barracks 70 | click a spot to build | click ground moves hero | right-click moves rally | space = pause, 1 / 2 = speed)`;
+    if (flow.screen === 'level') ui.level(sim);
   });
 }
 

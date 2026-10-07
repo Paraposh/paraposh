@@ -592,7 +592,7 @@ export class Sim {
     if (!sDef) return;
     const dealt = damageAfterResist(raw, type, sDef.armor, sDef.magicResist, this.data.config);
     soldier.hp -= dealt;
-    this.emit({ type: 'meleeHit', tick: this.tick, attackerId: e.id, targetId: soldier.id, damage: dealt, onSoldier: true });
+    this.emit({ type: 'meleeHit', tick: this.tick, attackerId: e.id, targetId: soldier.id, damage: dealt, onSoldier: true, x: soldier.x, y: soldier.y });
     if (soldier.hp <= 0) this.killSoldier(soldier);
   }
 
@@ -758,7 +758,7 @@ export class Sim {
     const raw = this.rng.range(sDef.damage[0], sDef.damage[1]);
     s.cooldown = Math.max(1, this.ticks(sDef.cooldown));
     const dealt = this.damageEnemy(target, raw, sDef.damageType, 0, 0);
-    this.emit({ type: 'meleeHit', tick: this.tick, attackerId: s.id, targetId: target.id, damage: dealt, onSoldier: false });
+    this.emit({ type: 'meleeHit', tick: this.tick, attackerId: s.id, targetId: target.id, damage: dealt, onSoldier: false, x: target.x, y: target.y });
   }
 
   // --------------------------------------------------------------- hero, spells
@@ -787,7 +787,7 @@ export class Sim {
       h.level++;
       h.maxHp = this.heroStats(h).hp;
       h.hp += h.maxHp - oldMax; // level-ups grant the extra HP
-      this.emit({ type: 'heroLevelUp', tick: this.tick, level: h.level });
+      this.emit({ type: 'heroLevelUp', tick: this.tick, level: h.level, x: h.x, y: h.y });
     }
   }
 
@@ -803,7 +803,7 @@ export class Sim {
     const st = this.heroStats(h);
     const dealt = damageAfterResist(raw, type, st.armor, st.magicResist, this.data.config);
     h.hp -= dealt;
-    this.emit({ type: 'meleeHit', tick: this.tick, attackerId: e.id, targetId: h.id, damage: dealt, onSoldier: true });
+    this.emit({ type: 'meleeHit', tick: this.tick, attackerId: e.id, targetId: h.id, damage: dealt, onSoldier: true, x: h.x, y: h.y });
     if (h.hp <= 0) this.killHero(h);
   }
 
@@ -888,7 +888,7 @@ export class Sim {
           h.cooldown = Math.max(1, this.ticks(st.cooldown));
           const raw = this.rng.range(st.damage[0], st.damage[1]);
           const dealt = this.damageEnemy(target, raw, st.damageType, 0, 0, true);
-          this.emit({ type: 'meleeHit', tick: this.tick, attackerId: h.id, targetId: target.id, damage: dealt, onSoldier: false });
+          this.emit({ type: 'meleeHit', tick: this.tick, attackerId: h.id, targetId: target.id, damage: dealt, onSoldier: false, x: target.x, y: target.y });
         }
       } else {
         h.state = 'moving';
@@ -1088,7 +1088,7 @@ export class Sim {
   /** Applies one projectile hit (scaled by factor), then shred if the target survived. */
   private hitEnemy(e: Enemy, p: Projectile, factor: number): void {
     const dealt = this.damageEnemy(e, p.damage * factor, p.damageType, p.armorPen, p.magicPen);
-    this.emit({ type: 'projectileHit', tick: this.tick, id: p.id, targetId: e.id, damage: dealt });
+    this.emit({ type: 'projectileHit', tick: this.tick, id: p.id, targetId: e.id, damage: dealt, x: e.x, y: e.y });
     if (p.shred && e.hp > 0) this.applyShred(e, p.shred);
   }
 
@@ -1107,7 +1107,7 @@ export class Sim {
     if (e.hp <= 0 && this.enemies.delete(e.id)) {
       const gold = e.spawned ? 0 : def.bounty;
       this.gold += gold;
-      this.emit({ type: 'enemyKilled', tick: this.tick, id: e.id, gold });
+      this.emit({ type: 'enemyKilled', tick: this.tick, id: e.id, gold, x: e.x, y: e.y });
       if (byHero && !e.spawned) this.gainXp(def.bounty);
       for (const t of def.traits) {
         if (t.type !== 'splitsOnDeath') continue;
