@@ -1,32 +1,184 @@
 {
   "type": "object",
   "additionalProperties": false,
-  "required": ["waves"],
+  "required": [
+    "waves"
+  ],
   "properties": {
     "waves": {
-      "type": "array", "minItems": 1,
+      "type": "array",
+      "minItems": 1,
       "items": {
-        "type": "object", "additionalProperties": false, "required": ["id","preDelay","groups"],
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "preDelay",
+          "groups"
+        ],
         "properties": {
-          "id": { "type": "integer" },
-          "preDelay": { "type": "number", "minimum": 0 },
+          "id": {
+            "type": "integer"
+          },
+          "preDelay": {
+            "type": "number",
+            "minimum": 0
+          },
           "groups": {
-            "type": "array", "minItems": 1,
+            "type": "array",
+            "minItems": 1,
             "items": {
-              "type": "object", "additionalProperties": false,
-              "required": ["enemyId","count","interval","startDelay","path"],
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "count",
+                "interval",
+                "startDelay",
+                "path"
+              ],
               "properties": {
-                "enemyId": { "type": "string" },
-                "count": { "type": "integer", "minimum": 1 },
-                "interval": { "type": "number", "minimum": 0 },
-                "startDelay": { "type": "number", "minimum": 0 },
-                "path": { "type": "string" }
-              }
+                "enemyId": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "interval": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "startDelay": {
+                  "type": "number",
+                  "minimum": 0
+                },
+                "path": {
+                  "type": "string"
+                },
+                "bossId": {
+                  "type": "string"
+                }
+              },
+              "oneOf": [
+                {
+                  "required": [
+                    "enemyId"
+                  ],
+                  "not": {
+                    "required": [
+                      "bossId"
+                    ]
+                  }
+                },
+                {
+                  "required": [
+                    "bossId"
+                  ],
+                  "not": {
+                    "required": [
+                      "enemyId"
+                    ]
+                  }
+                }
+              ]
             }
           }
         }
       }
     },
-    "bosses": { "type": "object" }
+    "bosses": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "enemyId",
+          "phases"
+        ],
+        "properties": {
+          "enemyId": {
+            "type": "string"
+          },
+          "phases": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "hpAbove"
+              ],
+              "properties": {
+                "hpAbove": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                },
+                "onEnter": {
+                  "type": "array",
+                  "items": {
+                    "oneOf": [
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "type",
+                          "enemyId",
+                          "count"
+                        ],
+                        "properties": {
+                          "type": {
+                            "const": "summon"
+                          },
+                          "enemyId": {
+                            "type": "string"
+                          },
+                          "count": {
+                            "type": "integer",
+                            "minimum": 1
+                          }
+                        }
+                      },
+                      {
+                        "type": "object",
+                        "additionalProperties": false,
+                        "required": [
+                          "type",
+                          "speedMult",
+                          "damageMult"
+                        ],
+                        "properties": {
+                          "type": {
+                            "const": "enrage"
+                          },
+                          "speedMult": {
+                            "type": "number",
+                            "exclusiveMinimum": 0
+                          },
+                          "damageMult": {
+                            "type": "number",
+                            "exclusiveMinimum": 0
+                          }
+                        }
+                      }
+                    ]
+                  }
+                },
+                "speedMult": {
+                  "type": "number",
+                  "exclusiveMinimum": 0
+                },
+                "armorDelta": {
+                  "type": "number"
+                },
+                "magicResistDelta": {
+                  "type": "number"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
   }
 }

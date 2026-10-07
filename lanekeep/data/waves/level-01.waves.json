@@ -30,6 +30,13 @@
           "interval": 3,
           "startDelay": 8,
           "path": "main"
+        },
+        {
+          "enemyId": "goblin_shaman",
+          "count": 1,
+          "interval": 0,
+          "startDelay": 14,
+          "path": "main"
         }
       ]
     },
@@ -84,6 +91,13 @@
           "interval": 1.6,
           "startDelay": 14,
           "path": "main"
+        },
+        {
+          "enemyId": "goblin_archer",
+          "count": 2,
+          "interval": 2.0,
+          "startDelay": 8,
+          "path": "main"
         }
       ]
     },
@@ -93,14 +107,14 @@
       "groups": [
         {
           "enemyId": "goblin_runner",
-          "count": 12,
+          "count": 10,
           "interval": 0.8,
           "startDelay": 0,
           "path": "main"
         },
         {
           "enemyId": "armored_brute",
-          "count": 5,
+          "count": 4,
           "interval": 2.4,
           "startDelay": 6,
           "path": "main"
@@ -114,12 +128,83 @@
         },
         {
           "enemyId": "cave_bat",
-          "count": 5,
+          "count": 4,
           "interval": 1.2,
           "startDelay": 18,
+          "path": "main"
+        },
+        {
+          "enemyId": "ogre",
+          "count": 1,
+          "interval": 0,
+          "startDelay": 12,
+          "path": "main"
+        },
+        {
+          "enemyId": "brood_mother",
+          "count": 1,
+          "interval": 0,
+          "startDelay": 22,
+          "path": "main"
+        }
+      ]
+    },
+    {
+      "id": 6,
+      "preDelay": 35,
+      "groups": [
+        {
+          "enemyId": "goblin_runner",
+          "count": 8,
+          "interval": 1.0,
+          "startDelay": 0,
+          "path": "main"
+        },
+        {
+          "bossId": "warlord",
+          "count": 1,
+          "interval": 0,
+          "startDelay": 10,
           "path": "main"
         }
       ]
     }
-  ]
+  ],
+  "bosses": {
+    "warlord": {
+      "enemyId": "warlord",
+      "phases": [
+        {
+          "hpAbove": 0.66
+        },
+        {
+          "hpAbove": 0.33,
+          "onEnter": [
+            {
+              "type": "summon",
+              "enemyId": "goblin_runner",
+              "count": 3
+            }
+          ],
+          "speedMult": 1.25
+        },
+        {
+          "hpAbove": 0.0,
+          "onEnter": [
+            {
+              "type": "enrage",
+              "speedMult": 1.3,
+              "damageMult": 1.5
+            },
+            {
+              "type": "summon",
+              "enemyId": "goblin_archer",
+              "count": 2
+            }
+          ],
+          "armorDelta": -0.15
+        }
+      ]
+    }
+  }
 }

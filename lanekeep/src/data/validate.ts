@@ -54,9 +54,27 @@ export function validateGameData(raw: RawGameData): GameData {
       if (!towers[towerId]) errors.push(`level.buildSpots.${spot.id}: unknown tower "${towerId}"`);
     }
   }
+  const known = (id: string, where: string) => {
+    if (!enemies[id]) errors.push(`${where}: unknown enemy "${id}"`);
+  };
+  for (const [enemyId, def] of Object.entries(enemies)) {
+    for (const t of def.traits) {
+      if (t.type === 'summons' || t.type === 'splitsOnDeath') known(t.enemyId, `enemies.${enemyId}.traits`);
+    }
+  }
+  for (const [bossId, boss] of Object.entries(waves.bosses ?? {})) {
+    known(boss.enemyId, `boss ${bossId}`);
+    for (const ph of boss.phases) for (const a of ph.onEnter ?? []) if (a.type === 'summon') known(a.enemyId, `boss ${bossId}`);
+    for (let i = 1; i < boss.phases.length; i++) {
+      if ((boss.phases[i] as { hpAbove: number }).hpAbove >= (boss.phases[i - 1] as { hpAbove: number }).hpAbove) {
+        errors.push(`boss ${bossId}: phases must have strictly decreasing hpAbove`);
+      }
+    }
+  }
   for (const wave of waves.waves) {
     for (const g of wave.groups) {
-      if (!enemies[g.enemyId]) errors.push(`wave ${wave.id}: unknown enemy "${g.enemyId}"`);
+      if (g.enemyId) known(g.enemyId, `wave ${wave.id}`);
+      if (g.bossId && !waves.bosses?.[g.bossId]) errors.push(`wave ${wave.id}: unknown boss "${g.bossId}"`);
       if (!level.paths[g.path]) errors.push(`wave ${wave.id}: unknown path "${g.path}"`);
     }
   }

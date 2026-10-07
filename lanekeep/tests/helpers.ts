@@ -42,6 +42,7 @@ export function injectEnemy(sim: Sim, defId: string, dist: number, id: number, p
   const e: Enemy = {
     id, defId, pathId, laneOffset: 0, dist, hp, maxHp: hp, x: 0, y: 0, prevX: 0, prevY: 0,
     shredArmor: 0, shredMagic: 0, shredStacks: 0, shredTicks: 0, blockers: [], attackCooldown: 0,
+    rangedCooldown: 0, traitTimers: sim.data.enemies[defId]!.traits.map((t) => (t.type === 'summons' ? sim.ticks(t.interval) : 0)), speedMult: 1, damageMult: 1, enraged: false, spawned: false, bossId: '', phase: -1,
   };
   [e.x, e.y] = sim.positionAt(e, dist);
   e.prevX = e.x;

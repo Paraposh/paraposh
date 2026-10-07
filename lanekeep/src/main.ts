@@ -11,6 +11,11 @@ const ENEMY_COLORS: Record<string, number> = {
   armored_brute: 0x6a6f7a,
   arcane_wisp: 0x4fb6c9,
   cave_bat: 0xb8a0d8,
+  goblin_shaman: 0x4a9a4a,
+  goblin_archer: 0xb8742a,
+  ogre: 0x8a5a3a,
+  brood_mother: 0x7a2a6a,
+  warlord: 0xc03030,
 };
 
 async function boot(): Promise<void> {
@@ -104,8 +109,10 @@ async function boot(): Promise<void> {
       const x = lerp(e.prevX, e.x);
       const y = lerp(e.prevY, e.y);
       const flying = data.enemies[e.defId]?.flying ?? false;
-      g.circle(x, flying ? y - 8 : y, 9).fill({ color: ENEMY_COLORS[e.defId] ?? 0xaa3030 });
-      g.rect(x - 10, y - 16, 20 * (e.hp / e.maxHp), 3).fill({ color: 0x40c060 });
+      const radius = data.enemies[e.defId]?.radius ?? 9;
+      g.circle(x, flying ? y - 8 : y, radius).fill({ color: ENEMY_COLORS[e.defId] ?? 0xaa3030 });
+      if (e.enraged) g.circle(x, y, radius + 3).stroke({ width: 2, color: 0xff5030 });
+      g.rect(x - radius, y - radius - 7, radius * 2 * (e.hp / e.maxHp), 3).fill({ color: e.bossId ? 0xffb030 : 0x40c060 });
     }
     for (const p of sim.projectiles.values()) g.circle(lerp(p.prevX, p.x), lerp(p.prevY, p.y), 3).fill({ color: 0xffffff });
     for (let i = rings.length - 1; i >= 0; i--) {
