@@ -1,0 +1,18 @@
+{
+  "archer": {
+    "family": "rangedPhysical",
+    "name": "Archer Post",
+    "antiAir": true,
+    "targeting": "furthestAlongPath",
+    "tiers": [
+      {
+        "cost": 70,
+        "range": 160,
+        "damage": [4, 7],
+        "damageType": "physical",
+        "cooldown": 0.8,
+        "projectile": { "speed": 400, "lead": true }
+      }
+    ]
+  }
+}

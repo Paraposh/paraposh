@@ -1,0 +1,129 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "id",
+    "name",
+    "world",
+    "startGold",
+    "paths",
+    "buildSpots",
+    "availableTowers",
+    "waves"
+  ],
+  "properties": {
+    "id": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "world": {
+      "type": "object",
+      "required": [
+        "width",
+        "height"
+      ],
+      "properties": {
+        "width": {
+          "type": "number"
+        },
+        "height": {
+          "type": "number"
+        }
+      }
+    },
+    "startGold": {
+      "type": "number",
+      "minimum": 0
+    },
+    "paths": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "points",
+          "spline",
+          "lanes",
+          "laneSpacing"
+        ],
+        "properties": {
+          "points": {
+            "type": "array",
+            "minItems": 2,
+            "items": {
+              "type": "array",
+              "minItems": 2,
+              "maxItems": 2,
+              "items": {
+                "type": "number"
+              }
+            }
+          },
+          "spline": {
+            "enum": [
+              "catmullRom",
+              "linear"
+            ]
+          },
+          "lanes": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "laneSpacing": {
+            "type": "number",
+            "minimum": 0
+          }
+        }
+      }
+    },
+    "buildSpots": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "id",
+          "x",
+          "y",
+          "allowed"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "x": {
+            "type": "number"
+          },
+          "y": {
+            "type": "number"
+          },
+          "allowed": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    "availableTowers": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "heroSpawn": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "items": {
+        "type": "number"
+      }
+    },
+    "waves": {
+      "type": "string"
+    }
+  }
+}

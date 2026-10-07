@@ -1,0 +1,26 @@
+{
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["tickRate","startingLives","sellRefundPct","earlyCallGoldPerSec","earlyCallMaxBonus","resistMin","resistMax","splashEdgeMult","laneOffsetJitter","projectileLeadIterations","pathSamplesPerSegment","stars","speeds"],
+  "properties": {
+    "tickRate": { "type": "integer", "minimum": 1 },
+    "startingLives": { "type": "integer", "minimum": 1 },
+    "sellRefundPct": { "type": "number", "minimum": 0, "maximum": 1 },
+    "earlyCallGoldPerSec": { "type": "number", "minimum": 0 },
+    "earlyCallMaxBonus": { "type": "number", "minimum": 0 },
+    "resistMin": { "type": "number", "minimum": 0, "maximum": 1 },
+    "resistMax": { "type": "number", "minimum": 0, "maximum": 1 },
+    "splashEdgeMult": { "type": "number", "minimum": 0, "maximum": 1 },
+    "laneOffsetJitter": { "type": "number", "minimum": 0, "maximum": 1 },
+    "projectileLeadIterations": { "type": "integer", "minimum": 1 },
+    "pathSamplesPerSegment": { "type": "integer", "minimum": 2 },
+    "stars": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false, "required": ["stars","minLives"],
+        "properties": { "stars": { "type": "integer", "minimum": 1, "maximum": 3 }, "minLives": { "type": "integer", "minimum": 0 } }
+      }
+    },
+    "speeds": { "type": "array", "items": { "type": "number", "minimum": 0 } }
+  }
+}
